@@ -8,9 +8,11 @@ Discord bot specialized for KA and other general purposes
     recent [NUMBER]  
     votes [NUMBER]  
   
+  
 ### returns the data of a specified user from Khan Academy
 ## search  
     user [USERNAME]  
+  
   
 ### prints the inputed text, but with a different "font" as specified by the user
 ## coolify  
@@ -20,8 +22,10 @@ Discord bot specialized for KA and other general purposes
     bubble [WORDS]  
     cursive [WORDS]  
   
+  
 ### asks a random would you rather question
 ## wyr  
   
+  
 ### prints a message defining the specified word or phrase
-## define [WORD/PHRASE]  
+    define [WORD/PHRASE]  
