@@ -3,19 +3,19 @@ Discord bot specialized for KA and other general purposes
 
 # Commands
 ### gets a program's data from a specified list on Khan Academy at a certain index
-## get  
+get  
     hot [NUMBER]  
     recent [NUMBER]  
     votes [NUMBER]  
   
   
 ### returns the data of a specified user from Khan Academy
-## search  
+search  
     user [USERNAME]  
   
   
 ### prints the inputed text, but with a different "font" as specified by the user
-## coolify  
+coolify  
     gothic [WORDS]  
     outline [WORDS]  
     monospace [WORDS]  
@@ -24,8 +24,8 @@ Discord bot specialized for KA and other general purposes
   
   
 ### asks a random would you rather question
-## wyr  
+wyr  
   
   
 ### prints a message defining the specified word or phrase
-    define [WORD/PHRASE]  
+define [WORD/PHRASE]  
