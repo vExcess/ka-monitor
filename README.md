@@ -1,5 +1,8 @@
 # ka_monitor
-Discord bot specialized for KA and other general purposes
+Discord bot specialized for KA and other general purposes.
+Has built in cuss word filter.
+
+Invite Link: https://discord.com/api/oauth2/authorize?client_id=845426453322530886&permissions=412317248576&scope=bot
 
 # Commands
 ### gets a program's data from a specified list on Khan Academy at a certain index
