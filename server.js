@@ -35,3 +35,4 @@ function keepAlive(){
 }
 
 module.exports = keepAlive;
+const mySecret = process.env['myToken']
