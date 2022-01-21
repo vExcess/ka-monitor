@@ -4,6 +4,7 @@ const client = new Discord.Client();
 const keepAlive = require("./server");
 const jsdom = require("jsdom");
 const { JSDOM } = jsdom;
+var fs = require('fs');
 const KA_fetch = {
     queryStrings: {
         getFullUserProfile: `getFullUserProfile($kaid: String, $username: String) {\\n  user(kaid: $kaid, username: $username) {\\n    id\\n    kaid\\n    key\\n    userId\\n    email\\n    username\\n    profileRoot\\n    gaUserId\\n    qualarooId\\n    isPhantom\\n    isDeveloper: hasPermission(name: \\\"can_do_what_only_admins_can_do\\\")\\n    isCurator: hasPermission(name: \\\"can_curate_tags\\\", scope: ANY_ON_CURRENT_LOCALE)\\n    isCreator: hasPermission(name: \\\"has_creator_role\\\", scope: ANY_ON_CURRENT_LOCALE)\\n    isPublisher: hasPermission(name: \\\"can_publish\\\", scope: ANY_ON_CURRENT_LOCALE)\\n    isModerator: hasPermission(name: \\\"can_moderate_users\\\", scope: GLOBAL)\\n    isParent\\n    isSatStudent\\n    isTeacher\\n    isDataCollectible\\n    isChild\\n    isOrphan\\n    isCoachingLoggedInUser\\n    canModifyCoaches\\n    nickname\\n    hideVisual\\n    joined\\n    points\\n    countVideosCompleted\\n    bio\\n    soundOn\\n    muteVideos\\n    showCaptions\\n    prefersReducedMotion\\n    noColorInVideos\\n    autocontinueOn\\n    newNotificationCount\\n    canHellban: hasPermission(name: \\\"can_ban_users\\\", scope: GLOBAL)\\n    canMessageUsers: hasPermission(name: \\\"can_send_moderator_messages\\\", scope: GLOBAL)\\n    isSelf: isActor\\n    hasStudents: hasCoachees\\n    hasClasses\\n    hasChildren\\n    hasCoach\\n    badgeCounts\\n    homepageUrl\\n    isMidsignupPhantom\\n    includesDistrictOwnedData\\n    preferredKaLocale {\\n      id\\n      kaLocale\\n      status\\n      __typename\\n    }\\n    underAgeGate {\\n      parentEmail\\n      daysUntilCutoff\\n      approvalGivenAt\\n      __typename\\n    }\\n    authEmails\\n    signupDataIfUnverified {\\n      email\\n      emailBounced\\n      __typename\\n    }\\n    pendingEmailVerifications {\\n      email\\n      unverifiedAuthEmailToken\\n      __typename\\n    }\\n    tosAccepted\\n    shouldShowAgeCheck\\n    __typename\\n  }\\n  actorIsImpersonatingUser\\n}\\n`,
@@ -56,9 +57,51 @@ const KA_fetch = {
         })
     }
 };
-var users = require('./users');
+var users = false;
+var nicks = false;
 
-var nicks = users.KA_USERS[0];
+var serverData = require('./serverData').SERVER_DATA;
+
+var programHashes = false;
+
+var base92 = {
+  codeKey: " !#$%&'()*+-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[]^_`abcdefghijklmnopqrstuvwxyz{|}~",
+  encode: function(num) {
+    var placeValues = 0;
+    while (Math.pow(this.codeKey.length, placeValues) <= num + 1) {
+      placeValues++;
+    }
+
+    var encoded = "";
+    for (var i = placeValues; i > 0; i--) {
+      var factor = Math.pow(this.codeKey.length, i - 1);
+      encoded += this.codeKey.charAt(Math.floor(num / factor));
+      num -= Math.floor(num / factor) * factor;
+    }
+
+    return encoded;
+  },
+  decode: function(num) {
+    var decoded = 0;
+    for (var i = num.length; i > 0; i--) {
+      var value = Math.pow(this.codeKey.length, i - 1).toString();
+      var value2 = this.codeKey.indexOf(num.charAt(num.length - i));
+      var value3 = value * value2;
+      decoded += value3;
+    }
+
+    return decoded;
+  }
+};
+
+function hashCode (str) {
+  var h = 0;
+  var stop = Math.min(str.length, 125);
+  for (var i = 0; i < stop; i++) {
+    h += i * str.charCodeAt(i);
+  }
+  return base92.encode(h);
+}
 
 function notWhitespace (str) {
   return str.replace(/\s/g, '').length;
@@ -67,6 +110,10 @@ function notWhitespace (str) {
 function searchUsers (input) {
   input = input.toLowerCase();
   var tokens = input.split(" ");
+  if (!users) {
+    users = require('./users');
+    nicks = users.KA_USERS[0];
+  }
 
   var results = [];
   var numResults = 0;
@@ -122,7 +169,7 @@ const nonoWords = {
   provided_by: "Free Web Headers",
   URL: "https://www.freewebheaders.com/full-list-of-bad-words-banned-by-google/",
   words: [
-    "anal", "anus", "arse", "ass", "ass fuck", "ass hole", "assfucker", "asshole", "assshole", "bastard", "bitch", "black cock", "bloody hell", "boobies", "boob", "boobs", "boong", "butt hole", "cock", "cockfucker", "cocksuck", "cocksucker", "condom", "coon", "coonnass", "crap", "cum", "cunt", "cyberfuck", "damm", "dammm", "damn", "deez nut", "dick", "douche", "dummy", "erect", "erection", "erotic", "escort", "fag", "faggot", "fuck", "fuck off", "fuck you", "fuckass", "fuckhole", "god damn", "gook", "hard core", "hardcore", "the hell", "helll", "hell no", "homoerotic", "hore", "jerk off", "jerked off", "jerking off",  "mother fucker", "motherfuck", "motherfucker", "negro", "nigga", "nigger", "nudes", "orgasim", "orgasm", "penis", "penisfucker", "pervert", "piss", "piss off", "porn", "porno", "pornography", "pornstar", "pussy", "retard", "sadist", "sex", "sexy", "shit", "shithole", "slut", "son of a bitch", "sperm", "testicle", "tits", "vagina", "viagra", "whore"
+    "anal", "anus", "arse", "ass", "ass fuck", "ass hole", "assfucker", "asshole", "assshole", "bastard", "bitch", "black cock", "bloody hell", "boobies", "boob", "boobs", "boong", "butt hole", "cock", "cockfucker", "cocksuck", "cocksucker", "condom", "coon", "coonnass", "crap", "cum", "cunt", "cyberfuck", "damm", "dammm", "damn", "deez nut", "dick", "douche", "dummy", "erect", "erection", "erotic", "escort", "fag", "faggot", "fuck", "fuck off", "fuck you", "fuckass", "fuckhole", "god damn", "gook", "the hell", "helll", "hell no", "homoerotic", "hore", "jerk off", "jerked off", "jerking off",  "mother fucker", "motherfuck", "motherfucker", "negro", "nigga", "nigger", "nudes", "orgasim", "orgasm", "penis", "penisfucker", "pervert", "piss", "piss off", "porn", "porno", "pornography", "pornstar", "pussy", "retard", "sadist", "sex", "sexy", "shit", "shithole", "slut", "son of a bitch", "sperm", "testicle", "tits", "vagina", "viagra", "whore"
   ],
 };
 
@@ -253,220 +300,240 @@ client.on("message", function(msg) {
   }
   var splitMsg = lowMsg.split(" ");
 
-  var msgCheck = "" + lowMsg;
-  msgCheck = replaceAll(msgCheck, "@", "a");
-  msgCheck = replaceAll(msgCheck, "$", "s");
-  msgCheck = replaceAll(msgCheck, "|", "l");
-  msgCheck = replaceAll(msgCheck, "/", "l");
-  msgCheck = replaceAll(msgCheck, "3", "e");
-  var deletePost = false;
-  var badWord = "";
-  for (var i = 0; i < nonoWords.words.length; i++) {
-    badWord = nonoWords.words[i];
-    var variations = [];
-    variations.push(" " + nonoWords.words[i]);
+  if (!serverData[msg.guild.id]) {
+    serverData[msg.guild.id] = {};
+  }
+  var servDat = serverData[msg.guild.id];
+  if (!servDat.name) {
+    servDat.name = msg.guild.name;
+  }
 
-    if (msgCheck === badWord) {
-      deletePost = true;
-    }
+  if (servDat.swearFilterOn) {
+    var msgCheck = "" + lowMsg;
+    msgCheck = replaceAll(msgCheck, "@", "a");
+    msgCheck = replaceAll(msgCheck, "$", "s");
+    msgCheck = replaceAll(msgCheck, "|", "l");
+    msgCheck = replaceAll(msgCheck, "/", "l");
+    msgCheck = replaceAll(msgCheck, "3", "e");
+    var deletePost = false;
+    var badWord = "";
+    for (var i = 0; i < nonoWords.words.length; i++) {
+      badWord = nonoWords.words[i];
+      var variations = [];
+      variations.push(" " + nonoWords.words[i]);
 
-    for (var j = 0; j < variations.length; j++) {
-      var wrd = variations[j];
-
-      // check normal text
-      if (msgCheck.includes(wrd)) {
-        var endChar = msgCheck.charAt(msgCheck.indexOf(wrd) + wrd.length);
-        if (!alphabet.includes(endChar) || endChar === "") {
-          deletePost = true;
-          break;
-        }
+      if (msgCheck === badWord) {
+        deletePost = true;
       }
-      // check embeds
-      else if (msg.embeds[0] && msg.embeds[0].description) {
-        var msgCheck2 = msg.embeds[0].description;
-        msgCheck2 = replaceAll(msgCheck2, "@", "a");
-        msgCheck2 = replaceAll(msgCheck2, "$", "s");
-        msgCheck2 = replaceAll(msgCheck2, "|", "l");
-        msgCheck2 = replaceAll(msgCheck2, "/", "l");
-        msgCheck2 = replaceAll(msgCheck2, "3", "e");
 
-        if (msgCheck2.includes(wrd)) {
-          var endChar = msgCheck2.charAt(msgCheck2.indexOf(wrd) + wrd.length);
+      for (var j = 0; j < variations.length; j++) {
+        var wrd = variations[j];
+
+        // check normal text
+        if (msgCheck.includes(wrd)) {
+          var endChar = msgCheck.charAt(msgCheck.indexOf(wrd) + wrd.length);
           if (!alphabet.includes(endChar) || endChar === "") {
             deletePost = true;
-            console.log("delete message");
             break;
           }
         }
+        // check embeds
+        else if (msg.embeds[0] && msg.embeds[0].description) {
+          var msgCheck2 = msg.embeds[0].description;
+          msgCheck2 = replaceAll(msgCheck2, "@", "a");
+          msgCheck2 = replaceAll(msgCheck2, "$", "s");
+          msgCheck2 = replaceAll(msgCheck2, "|", "l");
+          msgCheck2 = replaceAll(msgCheck2, "/", "l");
+          msgCheck2 = replaceAll(msgCheck2, "3", "e");
+
+          if (msgCheck2.includes(wrd)) {
+            var endChar = msgCheck2.charAt(msgCheck2.indexOf(wrd) + wrd.length);
+            if (!alphabet.includes(endChar) || endChar === "") {
+              deletePost = true;
+              console.log("delete message");
+              break;
+            }
+          }
+        }
+      }
+
+      if (deletePost) {
+        break;
       }
     }
 
-    if (deletePost) {
-      break;
-    }
-  }
+    if (deletePost && msg.channel.type !== 'dm') {
+      var msgToSend = "Deleted Message: ```" + msg.content + "``` because it contained `" + badWord + "`";
 
-  if (deletePost && msg.channel.type !== 'dm') {
-    var msgToSend = "Deleted Message: ```" + msg.content + "``` because it contained `" + badWord + "`";
+      msg.delete().catch(function() {
+        msg.channel.send("Please give me permission to delete messages");
+      });
 
-    msg.delete().catch(function() {
-      msg.channel.send("Please give me permission to delete messages");
-    });
+      msg.channel.send("Comment Deleted - Reason: that word is not allowed here.");
 
-    msg.channel.send("Comment Deleted - Reason: that word is not allowed here.");
-
-    if (!msg.author.bot) {
-      msg.author.send(msgToSend);
-    }
-
-    client.users.fetch("480905025112244234").then(function (user) {
-      if (user) {
-        user.send(msgToSend);
+      if (!msg.author.bot) {
+        msg.author.send(msgToSend);
       }
-    });
 
-    return;
+      client.users.fetch("480905025112244234").then(function (user) {
+        if (user) {
+          user.send(msgToSend);
+        }
+      });
+
+      return;
+    }
   }
+  
 
-  if (splitMsg[0] === "?online") {
-    msg.channel.send("All systems are up and running!");
+  if (splitMsg[0] === "?online" || splitMsg[0] === "?ping") {
+    msg.channel.send("Up and running!\n" + client.ws.ping + " millisecond delay");
+  }
+  else if (splitMsg[0] === "?guild") {
+    console.log(msg.guild.id);
   }
   else if (splitMsg[0] === "?help") {
     msg.channel.send(
       "```\n" +
+      "online\n\n" +
+      "update\n\tprograms\n\n" +
+      "plagiarism [PROGRAM_ID]\n\n" +
       "get\n\thot [NUMBER]\n\trecent [NUMBER]\n\tvotes [NUMBER]\n\tuser [USERNAME/KAID]\n\tprofilepic [@USER]\n\n" +
-      "search\n\tuser [NICKNAME]\n\n" +
+      "search\n\tuser [NICKNAME]\n\tgoogle [SEARCH QUERY]\n\n" +
       "coolify\n\tgothic [WORDS]\n\toutline [WORDS]\n\tmonospace [WORDS]\n\tbubble [WORDS]\n\tcursive [WORDS]\n\n" +
       "wyr\n\n" +
-      "define [WORD/PHRASE]" +
+      "define [WORD/PHRASE]\n\n" +
+      "testFilter\n\n" +
+      "set\n\tswearFilter [ON/OFF]\n\n" +
       "```"
     );
   }
-  else if (splitMsg[0] === "?plagiarism") {
-    var title = "";
-    var code = {};
-    var authorId = "";
-    var spinoffs = [];
-    var possibles = [];
-    var recurves = 0;
+  else if (splitMsg[0] === "?update") {
+    if (splitMsg[1] === "programs") {
+      if (msg.author.id !== "480905025112244234") {
+        msg.channel.send("You do not have permission to use that command.");
+      } else {
+        var targetRecurves = 1000;
+        var recurves = 0;
+        if (!programHashes) {
+          programHashes = require('./programs');
+          if (programHashes && programHashes.KA_PROGRAMHASHES) {
+            programHashes = programHashes.KA_PROGRAMHASHES;
+          } else {
+            programHashes = {};
+          }
+        }
+        msg.channel.send("Updating Program Database...");
+        
+        var getPrograms = function (programs, page_) {
+          for (let j = 0; j < programs.length; j++) {
+            getJSON("https://www.khanacademy.org/api/internal/scratchpads/" + programs[j]._id, function (data, program_) {
+              if (data && data.revision && data.revision.code) {
+                var splitCode = data.revision.code.split("\n");
+                var hashedCode = new Set();
+                for (var k = 0; k < splitCode.length; k += 2) {
+                  hashedCode.add(hashCode(splitCode[k]));
+                }
+                programHashes["_" + program_._id] = [data.title, Array.from(hashedCode).join(',')];
 
-    var checkPrograms = function (programs) {
-      for (let program of programs) {
-        // if is not by same author and is not spin-off
-        if (program.authorID !== authorId && !spinoffs.includes(program._id)) {
-          // check individual program          
-          getJSON("https://www.khanacademy.org/api/internal/scratchpads/" + program._id, function (data, program_) {
-            if (data && data.revision.code) {
-              let matches = 0;
-              let lines = data.revision.code.split("\n").map(line => line.trim()).filter(line => line.length > 4);
-              let linesSet = new Set(lines);
-              for (let line of linesSet) {
-                if (code.has(line)) {
-                  matches++;
+                if (program_.idx1 === targetRecurves && program_.idx2 === 49) {
+                  fs.writeFileSync('programs.js', "exports.KA_PROGRAMHASHES = " + JSON.stringify(programHashes), 'utf-8');
+                  msg.channel.send("Program Database Updated");
                 }
               }
-              if (matches > lines.length / 2) {
-                possibles.push([
-                  program_.programTitle,
-                  program_.programId,    
-                  matches            
-                ]);
+            }, {_id: programs[j]._id, idx1: page_.idx1, idx2: j});
+          }
+
+          if (recurves < targetRecurves) {
+            recurves++;
+            console.log("page " + recurves);
+            getJSON("https://willard.fun/programs?&start=" + recurves * 50, function (programs2, page_2) {
+              getPrograms(programs2, page_2);
+            }, {idx1: recurves});
+          }
+        };
+
+        getJSON("https://willard.fun/programs?&start=" + i * 50, function(programs, page_) {
+          getPrograms(programs, page_);
+        }, {idx1: recurves});
+      }
+    }
+  }
+  else if (splitMsg[0] === "?plagiarism") {
+    if (servDat.busy) {
+      msg.channel.send("Sorry, the bot is busy at this time");
+    } else {
+      var title = "";
+      var codeHashes = [];
+      var authorId = "";
+      var spinoffs = [];
+      var possibles = [];
+      if (!programHashes) {
+        programHashes = require('./programs');
+        if (programHashes && programHashes.KA_PROGRAMHASHES) {
+          programHashes = programHashes.KA_PROGRAMHASHES;
+        } else {
+          programHashes = {};
+        }
+      }
+      
+      servDat.busy = true;
+
+      // get program
+      getJSON("https://www.khanacademy.org/api/internal/scratchpads/" + splitMsg[1], function (data) {
+        title = data.title;
+        codeHashes = data.revision.code.split("\n").map(line => line.trim()).filter(line => line.length > 4);
+        for (var i = 0; i < codeHashes.length; i++) {
+          codeHashes[i] = hashCode(codeHashes[i]);
+        }
+        msg.channel.send(codeHashes.length + " lines of code to search...");
+        authorId = data.kaid;
+
+        // get spin-offs
+        getJSON("https://www.khanacademy.org/api/internal/scratchpads/" + splitMsg[1] + "/top-forks?limit=1000", function (data2) {
+          for (var i = 0; i < data2.scratchpads.length; i++) {
+            spinoffs.push(data2.scratchpads[i].url.split("/")[5]);
+          }
+
+          for (var program in programHashes) {
+            var lineHashes = programHashes[program][1].split(",");
+            var lineSet = new Set(lineHashes);
+            var matches = 0;
+            for (var i = 0; i < codeHashes.length; i++) {
+              if (lineSet.has(codeHashes[i])) {
+                matches += 2;
               }
             }
-          }, {programId: program._id, programTitle: program.title});
-        }
-        
-      }
+            if (matches > lineHashes.length * 0.15) {
+              possibles.push([
+                programHashes[program][0],
+                program.slice(1, program.length),    
+                matches
+              ]);
+            }
+          }
 
-      // for (var i = 0; i < programs.length; i++) {
-      //   var program = programs[i];
+          const exampleEmbed = new Discord.MessageEmbed();
 
-      //   // if is not by same author and is not spin-off
-      //   if (program.authorID !== authorId && !spinoffs.includes(program._id)) {
-      //     // check individual program
-      //     getJSON("https://www.khanacademy.org/api/internal/scratchpads/" + program._id, function (data, program_) {
-      //       if (data && data.revision.code) {
-      //         var code2 = data.revision.code.split("\n");
+          possibles.sort(function (a, b) {
+            return b[2] - a[2];
+          });
 
-      //         var linesMatching = 0;
+          for (var i = 0; i < Math.min(possibles.length, 10); i++) {
+            exampleEmbed.addField(possibles[i][2] + " lines that match", "[" + possibles[i][0] + "](https://www.khanacademy.org/computer-programming/i/" + possibles[i][1] + ")");
+          }
 
-      //         var numLines = Math.min(code.length, code2.length);
-      //         var halfNumLines = numLines / 2;
+          exampleEmbed.setColor("#14bf96");
+          exampleEmbed.setTitle("**Results for: " + title + "**");
+          exampleEmbed.setURL("https://www.khanacademy.org/computer-programming/i/" + splitMsg[1]);
+          msg.channel.send({
+            embed: exampleEmbed
+          });
+          servDat.busy = false;
 
-      //         // check if lines match
-      //         for (var l = 0; l < numLines; l++) {
-      //           for (var l2 = l - 50; l2 < l + 50; l2++) {
-      //             if (l2 > 0 && l2 < numLines) {
-      //               var line1 = code[l2];
-      //               var line2 = code2[l];
-      //               if (line1.length > 3 && line2.length > 3 && line2 === line1) {
-      //                 linesMatching++;
-      //                 l2 = l + 50;
-      //               }
-      //             }
-      //           }
-      //         }
-
-      //         if (linesMatching > halfNumLines) {
-      //           possibles.push([
-      //             program_.programTitle,
-      //             program_.programId,    
-      //             linesMatching            
-      //           ]);
-      //         }
-      //       }
-      //     }, {programId: program._id, programTitle: program.title});
-      //   }
-      // }
-
-      if (possibles.length > 10 || recurves >= 1000) {
-        const exampleEmbed = new Discord.MessageEmbed();
-
-        possibles.sort(function (a, b) {
-          return b[2] - a[2];
-        });
-
-        for (var i = 0; i < possibles.length; i++) {
-          exampleEmbed.addField(possibles[i][2] + " lines that match", "[" + possibles[i][0] + "](https://www.khanacademy.org/computer-programming/i/" + possibles[i][1] + ")");
-        }
-
-        exampleEmbed.setColor("#14bf96");
-        exampleEmbed.setTitle("**Results for: " + title + "**");
-        exampleEmbed.setURL("https://www.khanacademy.org/computer-programming/i/" + splitMsg[1]);
-
-        msg.channel.send({
-          embed: exampleEmbed
-        });
-
-      } else if (recurves < 1000) {
-        recurves++;
-        console.log("page " + recurves);
-        getJSON("https://willard.fun/programs?&start=" + recurves * 50, function (data2) {
-          checkPrograms(data2);
-        });
-      }
-    };
-
-    // get program
-    getJSON("https://www.khanacademy.org/api/internal/scratchpads/" + splitMsg[1], function (data) {
-      title = data.title;
-      code = data.revision.code.split("\n").map(line => line.trim()).filter(line => line.length > 4);
-      msg.channel.send(code.length + " lines of code to search...");
-      code = new Set(code);
-      authorId = data.kaid;
-
-      // get spin-offs
-      getJSON("https://www.khanacademy.org/api/internal/scratchpads/" + splitMsg[1] + "/top-forks?limit=1000", function (data2) {
-        for (var i = 0; i < data2.scratchpads.length; i++) {
-          spinoffs.push(data2.scratchpads[i].url.split("/")[5]);
-        }
-
-        // gets tops programs
-        getJSON("https://willard.fun/programs?&start=0", function (data3) {
-          checkPrograms(data3);
         });
       });
-    });
+    }
   }
   else if (splitMsg[0] === "?get") {
     var num = parseInt(splitMsg[2], 10);
@@ -572,7 +639,82 @@ client.on("message", function(msg) {
       msg.channel.send({
         embed: exampleEmbed
       });
+    }
+    if (splitMsg[1] === "google") {
+      var query = msg.content.slice(15, msg.content.length);
 
+      msg.channel.send("Searching...");
+
+      fetch("https://www.google.com/search?q=" + query)
+      .then(res => res.text())
+      .then(function (text) {
+        const dom = new JSDOM(text);
+        var results = dom.window.document.getElementsByClassName("ZINbbc xpd O9g5cc uUPGi");
+        var newResults = [];
+
+        const exampleEmbed = new Discord.MessageEmbed();
+
+        for (var i = 0; i < results.length; i++) {
+          var parts = results[i].getElementsByClassName("kCrYT");
+
+          if (parts[0] && parts[1]) {
+            if (!parts[0].getElementsByTagName("a")[0]) {
+              var temp = parts[0].cloneNode();
+              parts[0] = parts[1].cloneNode();
+              parts[1] = temp;
+            }
+            
+            var url = parts[0].getElementsByTagName("a");
+            if (url[0]) {
+              url = url[0].href.slice(7, url[0].href.indexOf("&sa="));
+            } else {
+              url = false;
+            }
+
+            var label = parts[0].getElementsByClassName("BNeawe vvjwJb AP7Wnd");
+            if (label[0]) {
+              label = label[0].textContent;
+            } else {
+              label = false;
+            }
+
+            var path = parts[0].getElementsByClassName("BNeawe UPmit AP7Wnd");
+            if (path[0]) {
+              path = path[0].textContent;
+            } else {
+              path = false;
+            }
+
+            var description = parts[1].getElementsByClassName("BNeawe s3v9rd AP7Wnd");
+            if (description[0]) {
+              description = description[0].textContent.split("...")[0];
+              description = description.slice(0, description.length - 1) + "...";
+            } else {
+              description = "";
+            }
+
+            if (label && url && path) {
+              newResults.push([label, path, url, description]);
+            }
+          }
+        }
+
+        for (var i = 0; i < newResults.length; i++) {
+          var r = newResults[i];
+          exampleEmbed.addField(r[0], "[" + r[1] + "](" + r[2] +  ")\n" + r[3]);
+          if (i < newResults.length - 1) {
+            exampleEmbed.addField("\u200b", "\u200b");
+          }
+        }
+
+        exampleEmbed.setColor("#14bf96");
+        exampleEmbed.setTitle("**Results for: " + query + "**");
+
+        msg.channel.send({
+          embed: exampleEmbed
+        });
+
+      })
     }
   }
   else if (splitMsg[0] === "?coolify") {
@@ -599,30 +741,29 @@ client.on("message", function(msg) {
     var wyrId = Math.floor(random(3, 500000));
 
     fetch("https://www.either.io/" + wyrId)
-      .then(res => res.text())
-      .then(text => {
-        if (!text.includes("We cannot find the page you are looking for")) {
-          var preface = text.split('<h3 class="preface">')[1].split("</h3>")[0];
+    .then(res => res.text())
+    .then(function (text) {
+      if (!text.includes("We cannot find the page you are looking for")) {
+        var preface = text.split('<h3 class="preface">')[1].split("</h3>")[0];
 
-          var options = text.split('<div class="option">');
-          options = [
-            options[3].split('</div>')[0].split('rel="nofollow">')[1].split('</a>')[0].replace("\n", ""),
-            options[4].split('</div>')[0].split('rel="nofollow">')[1].split('</a>')[0].replace("\n", "")
-          ];
+        var options = text.split('<div class="option">');
+        options = [
+          options[3].split('</div>')[0].split('rel="nofollow">')[1].split('</a>')[0].replace("\n", ""),
+          options[4].split('</div>')[0].split('rel="nofollow">')[1].split('</a>')[0].replace("\n", "")
+        ];
 
-          msg.channel.send("**" + preface + "**\n\n**EITHER...**\n:regional_indicator_a: " + options[0] + "\n\n**OR...**\n:regional_indicator_b: " + options[1])
-          .then(function(msg) {
-            msg.react("🇦")
-              .then(function() {
-                msg.react("🇧");
-              });
-          });
+        msg.channel.send("**" + preface + "**\n\n**EITHER...**\n:regional_indicator_a: " + options[0] + "\n\n**OR...**\n:regional_indicator_b: " + options[1])
+        .then(function(msg) {
+          msg.react("🇦")
+            .then(function() {
+              msg.react("🇧");
+            });
+        });
 
-        } else {
-          msg.channel.send("An Error Has Occured. Please Try Again In A Few Seconds.");
-        }
-
-      })
+      } else {
+        msg.channel.send("An Error Has Occured. Please Try Again In A Few Seconds.");
+      }
+    })
   }
   else if (splitMsg[0] === "?define") {
     var inputWord = lowMsg.slice(8, lowMsg.length);
@@ -709,6 +850,19 @@ client.on("message", function(msg) {
         description: "what the **helll**"
       }
     });
+  }
+  else if (splitMsg[0] === "?set") {
+    if (splitMsg[1] === "swearfilter") {
+      if (splitMsg[2] === "on" || splitMsg[2] === "true" || splitMsg[2] === "yes") {
+        msg.channel.send("The swear filter has been turned on in " + msg.guild.name);
+        servDat.swearFilterOn = true;
+      }
+      else if (splitMsg[2] === "off" || splitMsg[2] === "false" || splitMsg[2] === "no") {
+        msg.channel.send("The swear filter has been turned off in " + msg.guild.name);
+        servDat.swearFilterOn = false;
+      }
+      fs.writeFileSync('serverData.js', "exports.SERVER_DATA = " + JSON.stringify(serverData), 'utf-8');
+    }
   }
 
 });
