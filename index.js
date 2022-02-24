@@ -283,32 +283,17 @@ function coolifyText(message, font) {
 }
 
 function authorIsStaff (msg) {
-  var staffRole = msg.guild.roles.cache.find(function (role) {
-    return role.name.toLowerCase().includes("staff");
-  });
-  var ownerRole = msg.guild.roles.cache.find(function (role) {
-    return role.name.toLowerCase().includes("owner");
-  });
-  var modRole = msg.guild.roles.cache.find(function (role) {
-    return role.name.toLowerCase().includes("moderator");
-  });
-  if (modRole === undefined) {
-    modRole = msg.guild.roles.cache.find(function (role) {
-      return role.name.toLowerCase().includes("mod");
-    });
-  }
+  var authorizedRoles = ["owner", "staff", "moderator"];
+  var authorRoles = msg.member._roles;
+  var isStaff = false;
 
-  var authorRoles = msg.member.roles.cache;
+  msg.guild.roles.cache.forEach(function (role) {
+    if (authorizedRoles.includes(role.name.toLowerCase()) && authorRoles.includes(role.id)) {
+      isStaff = true;
+    }
+  });
 
-  if (
-    (staffRole !== undefined && authorRoles.has(staffRole.id)) || 
-    (ownerRole !== undefined && authorRoles.has(ownerRole.id)) || 
-    (modRole !== undefined && authorRoles.has(modRole.id))
-  ) {
-    return true;
-  } else {
-    return false;
-  }
+  return isStaff;
 }
 
 function filterMessage (msg, wordList, prefix) {
@@ -407,9 +392,7 @@ function filterMessage (msg, wordList, prefix) {
   return deletePost;
 }
 
-client.on("ready", function() {
-  console.log(`Logged in as ${client.user.tag}!`);
-});
+var mentionedUser;
 
 client.on("message", function(msg) {
   var lowMsg = msg.content;
@@ -460,9 +443,9 @@ client.on("message", function(msg) {
   
   var p = servDat.prefix;
 
-  var target = msg.mentions.users.first();
-  if (msg.content === "<@!845426453322530886>" && target) {
-    var memberTarget = msg.guild.members.cache.get(target.id);
+  mentionedUser = msg.mentions.users.first();
+  if (msg.content === "<@!845426453322530886>" && mentionedUser) {
+    var memberTarget = msg.guild.members.cache.get(mentionedUser.id);
     if (memberTarget && memberTarget.user.id === "845426453322530886") {
       msg.channel.send("My prefix is `" + servDat.prefix + "`");
     }
@@ -474,19 +457,26 @@ client.on("message", function(msg) {
   else if (splitMsg[0] === p+"guild") {
     console.log(msg.guild.id);
   }
+  else if (splitMsg[0] === p+"invite" || splitMsg[0] === p+"github") {
+    msg.channel.send("https://github.com/vExcess/ka-monitor");
+  }
   else if (splitMsg[0] === p+"help") {
     msg.channel.send(
       "```\n" +
       "online\n\n" +
+      "ping\n\n" +
+      "guild\n\n" +
+      "invite\n\n" +
+      "github\n\n" +
       "update\n\tprograms\n\n" +
       "plagiarism [PROGRAM_ID]\n\n" +
-      "get\n\thot [NUMBER]\n\trecent [NUMBER]\n\tvotes [NUMBER]\n\tuser [USERNAME/KAID]\n\tprofilepic [@USER]\n\tdiscordId [@USER]\n\n" +
+      "get\n\thot [NUMBER]\n\trecent [NUMBER]\n\tvotes [NUMBER]\n\tuser [KA_USERNAME/KAID]\n\tprofilepic [@USER]\n\tdiscordId [@USER]\n\troles [@USER]\n\n" +
       "search\n\tuser [NICKNAME]\n\tgoogle [SEARCH QUERY]\n\n" +
       "coolify\n\tgothic [WORDS]\n\toutline [WORDS]\n\tmonospace [WORDS]\n\tbubble [WORDS]\n\tcursive [WORDS]\n\n" +
       "wyr\n\n" +
       "define [WORD/PHRASE]\n\n" +
       "set prefix [PREFIX]\n\n" +
-      "swearFilter [ON/OFF/RESET/TEST]\n\n" +
+      "swearFilter [ON/OFF/RESET/TEST/ADD]\n\tadd [WORD]\n\tremove[WORD]" +
       "```"
     );
   }
@@ -618,11 +608,11 @@ client.on("message", function(msg) {
     }
   }
   else if (splitMsg[0] === p+"get") {
-    var num = parseInt(splitMsg[2], 10);
-    if (typeof num !== "number") {
-      return;
-    }
     if (splitMsg[1] === "hot") {
+      var num = parseInt(splitMsg[2], 10);
+      if (typeof num !== "number") {
+        return;
+      }
       if (num < 1 || num > 10000) {
         msg.channel.send("Inputted number must be between 1 and 10000 (inclusive)");
       } else {
@@ -633,6 +623,10 @@ client.on("message", function(msg) {
       }
     }
     if (splitMsg[1] === "recent") {
+      var num = parseInt(splitMsg[2], 10);
+      if (typeof num !== "number") {
+        return;
+      }
       if (num < 1 || num > 10000) {
         msg.channel.send("Inputted number must be between 1 and 10000 (inclusive)");
       } else {
@@ -643,6 +637,10 @@ client.on("message", function(msg) {
       }
     }
     if (splitMsg[1] === "votes") {
+      var num = parseInt(splitMsg[2], 10);
+      if (typeof num !== "number") {
+        return;
+      }
       if (num < 1 || num > 10000) {
         msg.channel.send("Inputted number must be between 1 and 10000 (inclusive)");
       } else {
@@ -653,7 +651,6 @@ client.on("message", function(msg) {
       }
     }
     if (splitMsg[1] === "profilepic" || splitMsg[1] === "pfp") {
-      var mentionedUser = msg.mentions.users.first();
       var imgLink = false;
       if (mentionedUser) {
         imgLink = msg.mentions.users.first().displayAvatarURL();
@@ -670,11 +667,30 @@ client.on("message", function(msg) {
     }
     if (splitMsg[1] === "discordid") {
       if (msg.guild && msg.guild.members && msg.guild.members.cache && msg.guild.members.cache.get) {
-        var memberTarget = msg.guild.members.cache.get(target.id);
+        var memberTarget = msg.guild.members.cache.get(mentionedUser.id);
         if (memberTarget && memberTarget.user) {
           msg.channel.send(memberTarget.user.id);  
         }
       }    
+    }
+    if (splitMsg[1] === "roles") {
+      if (!mentionedUser) {
+        mentionedUser = msg.member;
+      } else if (!mentionedUser.id) {
+        msg.channel.send("Not a valid user.");
+        return;
+      }
+
+      var userRoles = msg.guild.members.cache.find(member => member.user.id === mentionedUser.id)._roles;
+
+      var output = "Roles:\n";
+      msg.guild.roles.cache.forEach(function (role) {
+        if (role.id !== msg.guild.id && userRoles.includes(role.id)) {
+          output += "\t" + role.name + " (" + role.id + ")\n";
+        }
+      });
+
+      msg.channel.send(output);
     }
     if (splitMsg[1] === "user") {
       if (splitMsg[2].charAt(0) === "@") {
@@ -695,6 +711,11 @@ client.on("message", function(msg) {
           variables: variablesObj
         }, 
         function (data) {
+          if (!data.user) {
+            msg.channel.send("User not found");
+            return;
+          }
+
           var dateJoined = "Access Denied";
           if (data.user.joined) {
             dateJoined = data.user.joined.slice(0, 10).split("-");
@@ -978,25 +999,25 @@ client.on("message", function(msg) {
       fs.writeFileSync('serversDatabase.js', "exports.SERVER_DATA = " + JSON.stringify(serversDatabase, null, "  "), 'utf-8');
     }
     else if (splitMsg[1] === "add") {
-      splitMsg[2] = splitMsg[2].toLowerCase();
-      var wordIdx = servDat.bannedWords.indexOf(splitMsg[2]);
+      var wrd = lowMsg.slice(lowMsg.indexOf(splitMsg[1]) + splitMsg[1].length + 1, lowMsg.length);
+      var wordIdx = servDat.bannedWords.indexOf(wrd);
       if (wordIdx < 0) {
-        servDat.bannedWords.push(splitMsg[2]);
-        msg.channel.send("The word `" + splitMsg[2] + "` has been added to the filter.");
+        servDat.bannedWords.push(wrd);
+        msg.channel.send("The word `" + wrd + "` has been added to the filter.");
         fs.writeFileSync('serversDatabase.js', "exports.SERVER_DATA = " + JSON.stringify(serversDatabase, null, "  "), 'utf-8');
       } else {
-        msg.channel.send("The word `" + splitMsg[2] + "` is already on the filter.");
+        msg.channel.send("The word `" + wrd + "` is already on the filter.");
       }
     }
     else if (splitMsg[1] === "remove") {
-      splitMsg[2] = splitMsg[2].toLowerCase();
-      var wordIdx = servDat.bannedWords.indexOf(splitMsg[2]);
+      var wrd = lowMsg.slice(lowMsg.indexOf(splitMsg[1]) + splitMsg[1].length + 1, lowMsg.length);
+      var wordIdx = servDat.bannedWords.indexOf(wrd);
       if (wordIdx >= 0) {
         servDat.bannedWords.splice(wordIdx, 1);
-        msg.channel.send("The word `" + splitMsg[2] + "` has been removed from the filter.");
+        msg.channel.send("The word `" + wrd + "` has been removed from the filter.");
         fs.writeFileSync('serversDatabase.js', "exports.SERVER_DATA = " + JSON.stringify(serversDatabase, null, "  "), 'utf-8');
       } else {
-        msg.channel.send("The word `" + splitMsg[2] + "` is not on the filter.");
+        msg.channel.send("The word `" + wrd + "` is not on the filter.");
       }
     }
   }
@@ -1020,6 +1041,16 @@ client.on("message", function(msg) {
   }
   
 
+});
+
+client.on("ready", function() {
+  console.log(`Logged in as ${client.user.tag}!`);
+});
+
+client.on('debug', function (e) {
+  // if (!e.includes("token")) {
+  //   console.log(e);
+  // }
 });
 
 keepAlive();
