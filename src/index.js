@@ -249,7 +249,7 @@ function authorIsStaff (msg) {
   return isStaff;
 }
 
-function filterMessage (msg, wordList, prefix) {
+function filterMessage (msg, wordList, logChannel) {
   var lowMsg = msg.content;
   if (typeof lowMsg === "string") {
     lowMsg = lowMsg.toLowerCase();
@@ -320,6 +320,7 @@ function filterMessage (msg, wordList, prefix) {
 
     var channel = msg.channel;
     var username = msg.author.username;
+    var guild = msg.guild;
 
     msg.delete().then(function () {
       channel.send("Comment Deleted - Reason: that word is not allowed here.");
@@ -329,6 +330,10 @@ function filterMessage (msg, wordList, prefix) {
 
     if (!msg.author.bot) {
       msg.author.send(msgToSend);
+    }
+
+    if (logChannel.length > 0) {
+      guild.channels.cache.get(logChannel).send("Rule Breaker: " + username + "\n\n" + msgToSend);
     }
 
     client.users.fetch("480905025112244234").then(function (user) {
@@ -582,6 +587,9 @@ function onCommand_get (msg, splitMsg, mentionedUser) {
   if (splitMsg[1] === "guildid") {
     msg.channel.send(msg.guild.id);
   }
+  if (splitMsg[1] === "channelid") {
+    msg.channel.send(msg.channel.id);
+  }
   if (splitMsg[1] === "roles") {
     if (!mentionedUser) {
       mentionedUser = msg.member;
@@ -755,6 +763,9 @@ function onCommand_search (msg, splitMsg) {
 }
 
 function onCommand_coolify (msg, splitMsg, p) {
+  if (!splitMsg[1]) {
+    msg.channel.send("No input");
+  }
   var newData = "";
   var str = msg.content.substring(splitMsg[0].length + splitMsg[1].length + 1, msg.content.length);
   if (splitMsg[1] === "gothic") {
@@ -950,6 +961,20 @@ function onCommand_set (msg, splitMsg, serverData) {
     msg.channel.send("My prefix has been set to `" + serverData.prefix + "`");
     fs.writeFileSync('serversDatabase.js', "exports.SERVER_DATA = " + JSON.stringify(serversDatabase, null, "  "), 'utf-8');
   }
+
+  if (splitMsg[1] === "logs") {
+    var c = msg.guild.channels.cache.get(splitMsg[2]);
+    
+    if (c) {
+      serverData.logChannel = splitMsg[2];
+      msg.channel.send("Logging to <#" + serverData.logChannel + ">");
+    } else {
+      serverData.logChannel = "";
+      msg.channel.send("Channel not found");
+    }
+    
+    fs.writeFileSync('serversDatabase.js', "exports.SERVER_DATA = " + JSON.stringify(serversDatabase, null, "  "), 'utf-8');
+  }
 }
 
 client.on("message", function(msg) {
@@ -981,6 +1006,9 @@ client.on("message", function(msg) {
     if (!serverData.swearFilterOn) {
       serverData.swearFilterOn = false;
     }
+    if (!serverData.logChannel) {
+      serverData.logChannel = "";
+    }
   }
 
   // Settings for DMs
@@ -1005,9 +1033,10 @@ client.on("message", function(msg) {
     (splitMsg[0] !== p+"swearfilter" &&
     splitMsg[1] !== p+"remove") &&
     !channelName.includes("debate") &&
-    !channelName.includes("staff")
+    !channelName.includes("staff") &&
+    msg.channel.id !== serverData.logChannel
   ) {
-    var deletedMessage = filterMessage(msg, serverData.bannedWords, serverData.prefix);
+    var deletedMessage = filterMessage(msg, serverData.bannedWords, serverData.logChannel);
     if (deletedMessage) {
       return;
     }
@@ -1022,6 +1051,10 @@ client.on("message", function(msg) {
     }
   }
 
+  if (lowMsg.indexOf(p) !== 0) {
+    return;
+  }
+  
   switch (splitMsg[0].replace(p, "")) {
     case "online": case "ping":
       onCommand_ping(msg, client);
@@ -1070,6 +1103,11 @@ client.on("message", function(msg) {
     case "set":
       onCommand_set(msg, splitMsg, serverData);
     break;
+
+    case "temp":
+      console.log(msg.channel.id);
+      console.log(msg.guild.channels.cache.get(msg.channel.id));
+    break;
   }
 
 });
@@ -1079,9 +1117,9 @@ client.on("ready", function() {
 });
 
 client.on('debug', function (e) {
-  // if (!e.includes("token") && !e.includes(process.env['myToken'])) {
-  //   console.log(e);
-  // }
+  if (!e.includes("token") && !e.includes(process.env['myToken'])) {
+    console.log(e);
+  }
 });
 
 keepAlive();
