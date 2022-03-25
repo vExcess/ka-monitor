@@ -141,6 +141,28 @@ String.prototype.replaceAll = function(str1, str2) {
   );
 };
 
+function shrinkTo2DupChars (s) {
+  var newS = "";
+  var idx = 0;
+  var currChar = s.charAt(idx);
+  var sLen = s.length;
+  
+  while (idx < sLen) {
+    var currRepeats = 0;
+    while (s.charAt(idx + 1) === currChar) {
+      idx++;
+      currRepeats++;
+    }
+    idx -= currRepeats > 0 ? 1 : 0;
+    
+    newS += currChar;
+    idx++;
+    currChar = s.charAt(idx);
+    currRepeats = 0;
+  }
+  return newS;
+}
+
 function getJSON (url, callback, extras) {
   fetch(url)
   .then(function (response) {
@@ -249,7 +271,8 @@ function authorIsStaff (msg) {
   return isStaff;
 }
 
-function filterMessage (msg, wordList, logChannel) {
+function filterMessage (msg, wordList, logChannel, p) {  
+  // get lowercase of message
   var lowMsg = msg.content;
   if (typeof lowMsg === "string") {
     lowMsg = lowMsg.toLowerCase();
@@ -257,15 +280,29 @@ function filterMessage (msg, wordList, logChannel) {
     console.log("ERROR: lowMsg is not typeof string" + lowMsg);
     return;
   }
+
+  // get tokens of message
+  var splitMsg = lowMsg.split(" ");
   
+  if (
+    (splitMsg[0] === p+"swearfilter" && (splitMsg[1] === "add" || splitMsg[1] === "remove")) || 
+    (msg.content.slice(0, 10) === "The word `" && msg.author.bot)
+  ) {
+    return false;
+  }
+    
   var isEmbed = false;
+
+  // the message to check
   var msgCheck = "" + lowMsg;
 
+  // add embeds content to msgCheck
   if (msg.embeds[0] && msg.embeds[0].description) {
     isEmbed = true;
     msgCheck += msg.embeds[0].description.toLowerCase();
   }
 
+  // replace common evasions
   msgCheck = replaceAll(msgCheck, "@", "a");
   msgCheck = replaceAll(msgCheck, "$", "s");
   msgCheck = replaceAll(msgCheck, "|", "l");
@@ -273,24 +310,34 @@ function filterMessage (msg, wordList, logChannel) {
   msgCheck = replaceAll(msgCheck, "3", "e");
   msgCheck = replaceAll(msgCheck, "4", "a");
 
-  msgCheck = replaceAll(msgCheck, "*", "");
-  msgCheck = replaceAll(msgCheck, "_", "");
-  msgCheck = replaceAll(msgCheck, "~", "");
+  // remove symbols
+  var symbolsToRemove = "`~!@#$%^&*()-=_+[]\\{}|;':\",./<>?";
+  var newMsgCheck = "";
+  for (var i = 0, len = msgCheck.length; i < len; i++) {
+    var c = msgCheck.charAt(i);
+    if (!symbolsToRemove.includes(c)) {
+      newMsgCheck += c;
+    }
+  }
+  msgCheck = newMsgCheck;
+
+  // remove duplicate letters
+  msgCheck = shrinkTo2DupChars(msgCheck);
 
   var deletePost = false;
   var badWord = "";
 
   // go through all the bad words
-  for (var i = 0; i < wordList.length; i++) {
+  for (var i = 0, len = wordList.length; i < len; i++) {
     // the current bad word
     badWord = wordList[i];
 
     // create variations
     var variations = [];
-    variations.push(" " + wordList[i]);
+    variations.push(" " + shrinkTo2DupChars(wordList[i]));
 
     // check if the message is the bad word
-    if (msgCheck === badWord) {
+    if (msgCheck === shrinkTo2DupChars(badWord)) {
       deletePost = true;
     }
 
@@ -978,37 +1025,171 @@ function onCommand_set (msg, splitMsg, serverData) {
 }
 
 client.on("message", function(msg) {
+  try {
+    // get the message as lowercase
+    var lowMsg;
+    if (typeof msg.content === "string") {
+      lowMsg = msg.content.toLowerCase();
+    } else {
+      console.log("ERROR: msg.content is not typeof string" + msg.content);
+      return;
+    }
+
+    // get message tokens
+    var splitMsg = lowMsg.split(" ");
+  
+    var serverData;
+
+    // set up guild settings
+    if (msg.guild) {
+      if (!serversDatabase[msg.guild.id]) {
+        serversDatabase[msg.guild.id] = {};
+      }
+      serverData = serversDatabase[msg.guild.id];
+      if (!serverData.name) {
+        serverData.name = msg.guild.name;
+      }
+      if (!serverData.prefix) {
+        serverData.prefix = "?";
+      }
+      if (!serverData.bannedWords) {
+        serverData.bannedWords = defaultBannedWords.slice(0, defaultBannedWords.length);
+      }
+      if (!serverData.swearFilterOn) {
+        serverData.swearFilterOn = false;
+      }
+      if (!serverData.logChannel) {
+        serverData.logChannel = "";
+      }
+    }
+  
+    // Settings for DMs
+    if (!serverData) {
+      serverData = {
+       "swearFilterOn": false,
+       "name": undefined,
+       "prefix": "?",
+       "bannedWords": []
+      }
+    }
+
+    // shorthand for prefix
+    var p = serverData.prefix;
+
+    // get channel Name
+    var channelName = "";
+    if (msg.channel && msg.channel.name) {
+      channelName = msg.channel.name.toLowerCase();
+    }
+
+    // filter message
+    if (
+      serverData.swearFilterOn &&
+      !channelName.includes("debate") &&
+      !channelName.includes("staff") &&
+      msg.channel.id !== serverData.logChannel
+    ) {
+      var deletedMessage = filterMessage(msg, serverData.bannedWords, serverData.logChannel, p);
+      if (deletedMessage) {
+        return;
+      }
+    }
+  
+    var mentionedUser = msg.mentions.users.first();
+
+    // if pinged bot
+    if (msg.content === "<@!845426453322530886>" && mentionedUser) {
+      var memberTarget = msg.guild.members.cache.get(mentionedUser.id);
+      if (memberTarget && memberTarget.user.id === "845426453322530886") {
+        msg.channel.send("My prefix is `" + serverData.prefix + "`");
+      }
+    }
+
+    // check if has prefix
+    if (lowMsg.indexOf(p) !== 0) {
+      return;
+    }
+
+    // commands
+    switch (splitMsg[0].replace(p, "")) {
+      case "online": case "ping":
+        onCommand_ping(msg, client);
+      break;
+        
+      case "help":
+        onCommand_help(msg);
+      break;
+        
+      case "invite": case "github":
+        onCommand_github(msg);
+      break;
+        
+      case "update":
+        onCommand_update(msg, splitMsg);
+      break;
+  
+      case "plagiarism":
+        onCommand_plagiarism(msg, splitMsg, serverData);
+      break;
+  
+      case "get":
+        onCommand_get(msg, splitMsg, mentionedUser);
+      break;
+  
+      case "search":
+        onCommand_search(msg, splitMsg);
+      break;
+  
+      case "coolify":
+        onCommand_coolify(msg, splitMsg, p);
+      break;
+  
+      case "wyr":
+        onCommand_wyr(msg);
+      break;
+  
+      case "define":
+        onCommand_define(msg, lowMsg);
+      break;
+  
+      case "swearfilter":
+        onCommand_swearFilter(msg, splitMsg, lowMsg, serverData);
+      break;
+  
+      case "set":
+        onCommand_set(msg, splitMsg, serverData);
+      break;
+  
+      case "temp":
+        console.log(msg.channel.id);
+        console.log(msg.guild.channels.cache.get(msg.channel.id));
+      break;
+    }
+  } catch (err) {
+    msg.channel.send("oh no, an error has occurred:\n```" + err.toString().slice(0, 1000) + "```");
+    console.log(err);
+  }
+});
+
+
+client.on("messageUpdate", function(oldMsg, newMsg) {
+  // get the message as lowercase
   var lowMsg;
-  if (typeof msg.content === "string") {
-    lowMsg = msg.content.toLowerCase();
+  if (typeof newMsg.content === "string") {
+    lowMsg = newMsg.content.toLowerCase();
   } else {
-    console.log("ERROR: msg.content is not typeof string" + msg.content);
+    console.log("ERROR: newMsg.content is not typeof string" + newMsg.content);
     return;
   }
+
+  // get message tokens
   var splitMsg = lowMsg.split(" ");
 
   var serverData;
-  
-  if (msg.guild) {
-    if (!serversDatabase[msg.guild.id]) {
-      serversDatabase[msg.guild.id] = {};
-    }
-    serverData = serversDatabase[msg.guild.id];
-    if (!serverData.name) {
-      serverData.name = msg.guild.name;
-    }
-    if (!serverData.prefix) {
-      serverData.prefix = "?";
-    }
-    if (!serverData.bannedWords) {
-      serverData.bannedWords = defaultBannedWords.slice(0, defaultBannedWords.length);
-    }
-    if (!serverData.swearFilterOn) {
-      serverData.swearFilterOn = false;
-    }
-    if (!serverData.logChannel) {
-      serverData.logChannel = "";
-    }
+
+  // set up guild settings
+  if (newMsg.guild) {
+    serverData = serversDatabase[newMsg.guild.id];
   }
 
   // Settings for DMs
@@ -1021,109 +1202,45 @@ client.on("message", function(msg) {
     }
   }
 
+  // shorthand for prefix
   var p = serverData.prefix;
-  
+
+  // get channel Name
   var channelName = "";
-  if (msg.channel && msg.channel.name) {
-    channelName = msg.channel.name.toLowerCase();
+  if (newMsg.channel && newMsg.channel.name) {
+    channelName = newMsg.channel.name.toLowerCase();
   }
 
+  // filter message
   if (
     serverData.swearFilterOn &&
-    (splitMsg[0] !== p+"swearfilter" &&
-    splitMsg[1] !== p+"remove") &&
     !channelName.includes("debate") &&
     !channelName.includes("staff") &&
-    msg.channel.id !== serverData.logChannel
+    newMsg.channel.id !== serverData.logChannel
   ) {
-    var deletedMessage = filterMessage(msg, serverData.bannedWords, serverData.logChannel);
+    var deletedMessage = filterMessage(newMsg, serverData.bannedWords, serverData.logChannel, p);
     if (deletedMessage) {
       return;
     }
   }
-
-  var mentionedUser = msg.mentions.users.first();
-
-  if (msg.content === "<@!845426453322530886>" && mentionedUser) {
-    var memberTarget = msg.guild.members.cache.get(mentionedUser.id);
-    if (memberTarget && memberTarget.user.id === "845426453322530886") {
-      msg.channel.send("My prefix is `" + serverData.prefix + "`");
-    }
-  }
-
-  if (lowMsg.indexOf(p) !== 0) {
-    return;
-  }
-  
-  switch (splitMsg[0].replace(p, "")) {
-    case "online": case "ping":
-      onCommand_ping(msg, client);
-    break;
-      
-    case "help":
-      onCommand_help(msg);
-    break;
-      
-    case "invite": case "github":
-      onCommand_github(msg);
-    break;
-      
-    case "update":
-      onCommand_update(msg, splitMsg);
-    break;
-
-    case "plagiarism":
-      onCommand_plagiarism(msg, splitMsg, serverData);
-    break;
-
-    case "get":
-      onCommand_get(msg, splitMsg, mentionedUser);
-    break;
-
-    case "search":
-      onCommand_search(msg, splitMsg);
-    break;
-
-    case "coolify":
-      onCommand_coolify(msg, splitMsg, p);
-    break;
-
-    case "wyr":
-      onCommand_wyr(msg);
-    break;
-
-    case "define":
-      onCommand_define(msg, lowMsg);
-    break;
-
-    case "swearfilter":
-      onCommand_swearFilter(msg, splitMsg, lowMsg, serverData);
-    break;
-
-    case "set":
-      onCommand_set(msg, splitMsg, serverData);
-    break;
-
-    case "temp":
-      console.log(msg.channel.id);
-      console.log(msg.guild.channels.cache.get(msg.channel.id));
-    break;
-  }
-
 });
+
 
 client.on("ready", function() {
   console.log(`Logged in as ${client.user.tag}!`);
 });
 
+
 client.on('debug', function (e) {
-  if (!e.includes("token") && !e.includes(process.env['myToken'])) {
-    console.log(e);
-  }
+  // if (!e.includes("token") && !e.includes(process.env['myToken'])) {
+  //   console.log(e);
+  // }
 });
+
 
 keepAlive();
 client.login(process.env['myToken']);
+
 
 setInterval(function() {
   var d = new Date().toLocaleTimeString();
