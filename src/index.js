@@ -5,7 +5,7 @@ const keepAlive = require("./server");
 const jsdom = require("jsdom");
 const {JSDOM} = jsdom;
 const fs = require('fs');
-const KA_fetch = require('./KA_fetch').KA_fetch;
+const KA_fetch = require('./KA_fetch');
 KA_fetch.nodeFetch = fetch;
 
 var users = false;
@@ -115,7 +115,7 @@ const coolFont_bubble = ["\t", "\n", " ", "ⓐ", "ⓑ", "ⓒ", "ⓓ", "ⓔ", "�
 const coolFont_cursive = ["\t", "\n", " ", "𝒶", "𝒷", "𝒸", "𝒹", "ℯ", "𝒻", "ℊ", "𝒽", "𝒾", "𝒿", "𝓀", "𝓁", "𝓂", "𝓃", "ℴ", "𝓅", "𝓆", "𝓇", "𝓈", "𝓉", "𝓊", "𝓋", "𝓌", "𝓍", "𝓎", "𝓏", "𝒜", "ℬ", "𝒞", "𝒟", "ℰ", "ℱ", "𝒢", "ℋ", "ℐ", "𝒥", "𝒦", "ℒ", "ℳ", "𝒩", "𝒪", "𝒫", "𝒬", "ℛ", "𝒮", "𝒯", "𝒰", "𝒱", "𝒲", "𝒳", "𝒴", "𝒵", "1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "`", "~", "!", "@", "#", "$", "%", "^", "&", "*", "(", ")", "-", "=", "_", "+", "[", "]", "\\", "{", "}", "|", ";", "'", ":", "\"", ",", ".", "/", "<", ">", "?"];
 
 const whiteListedWords = [
-    "he'll", "as", "bob", "mad"
+    "he'll", "as", "bob", "mad", "ms", "yr", "yrs", "pt", "pts", "px", "kg", "oz", "ml", "tsp", "tb", "dam"
 ];
 
 const defaultBannedWords = [
@@ -322,7 +322,7 @@ function filterMessage(msg, wordList, logChannel, p) {
     }
 
     // the message to check
-    var msgCheck = "" + lowMsg.replaceAll("\n", " ").replaceAll("  ", " ");
+    var msgCheck = "" + lowMsg;
 
     var isEmbed = false;
     // add embeds content to msgCheck
@@ -332,7 +332,9 @@ function filterMessage(msg, wordList, logChannel, p) {
     }
 
     // remove symbols
-    var symbolsToRemove = "`~!@#$%^&*()-=_+[]\\{}|;':\",./<>?";
+    msgCheck = msgCheck.replaceAll("\n", " ").replaceAll("  ", " ").replaceAll("'", "").replaceAll("/", " ");
+    
+    var symbolsToRemove = "~!#%^&*()-=_+[]\\{};':\",.<>?";
     var newMsgCheck = "";
     for (var i = 0, len = msgCheck.length; i < len; i++) {
         var c = msgCheck.charAt(i);
@@ -344,20 +346,32 @@ function filterMessage(msg, wordList, logChannel, p) {
     }
     msgCheck = newMsgCheck;
 
+    // remove whitelisted words from the check
+    for (var i = 0; i < whiteListedWords.length; i++) {
+        if (!wordList.includes(whiteListedWords[i])) {
+            msgCheck = msgCheck.replaceAll(whiteListedWords[i] + " ", " ");
+            // msgCheck = msgCheck.replaceAll(whiteListedWords[i].split("").reverse().join(""), "");
+        }
+    }
+
     // remove numbers
     msgCheck = msgCheck.split(" ");
     for (var i = 0; i < msgCheck.length; i++) {
-        if (!Number.isNaN(Number(msgCheck[i]))) {
+        var tok = msgCheck[i].toLowerCase();
+        var hasLetter = false;
+        
+        for (var j = 0; j < tok.length; j++) {
+            if (alphabet.includes(tok.charAt(j))) {
+                hasLetter = true;
+                break;
+            }
+        }
+        
+        if (!hasLetter) {
             msgCheck[i] = "";
         }
     }
     msgCheck = msgCheck.join(" ");
-
-    // remove whitelisted words from the check
-    for (var i = 0; i < whiteListedWords.length; i++) {
-        msgCheck = msgCheck.replaceAll(whiteListedWords[i] + " ", "");
-        msgCheck = msgCheck.replaceAll(whiteListedWords[i].split("").reverse().join(""), "");
-    }
 
     // replace common evasions
     msgCheck = msgCheck.replaceAll("@", "a");
@@ -386,7 +400,7 @@ function filterMessage(msg, wordList, logChannel, p) {
         variations.push(removeDupChars(wordList[i]));
         variations.push(removeDupChars(wordList[i]).replaceAll("a", "6"));
         variations.push(removeDupChars(wordList[i]).replaceAll("g", "6"));
-        variations.push(removeDupChars(wordList[i]).split("").reverse().join(""));
+        // variations.push(removeDupChars(wordList[i]).split("").reverse().join(""));
 
         // go through all the variations
         for (var j = 0; j < variations.length; j++) {
@@ -416,6 +430,7 @@ function filterMessage(msg, wordList, logChannel, p) {
 
     deletePost = deletePost && msg.channel.type !== 'dm';
 
+    // delete post
     if (deletePost) {
         console.log(msgCheck);
         
@@ -431,7 +446,7 @@ function filterMessage(msg, wordList, logChannel, p) {
         }
 
         msg.delete().then(function () {
-            channel.send("Comment Deleted - Reason: that word is not allowed here.");
+            channel.send("Deleted comment from " + username + " for using a dissallowed word.");
         }).catch(function () {});
 
         if (!msg.author.bot) {
@@ -1557,7 +1572,7 @@ client.on("ready", function () {
 // ---------- ON DEBUG ---------- //
 client.on('debug', function (e) {
     if (!e.includes("token") && !e.includes(process.env['myToken'])) {
-        console.log(e);
+        // console.log(e);
     }
 });
 
