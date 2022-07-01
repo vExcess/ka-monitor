@@ -1,4 +1,4 @@
-# ka_monitor
+# KA Monitor
 A general purpose Discord bot. Has fairly advanced swear filtering. Is able to display information about a user's activity and provide leaderboards of user activity. Has multiple Khan Academy related commands: is able to search for users on KA and lookup information about them. Able to check if a KA program is plagiarised. Is able to define and translate words/phrases. Is able to run blocks of javascript code. Has many fun features such as would you rather questions.
 
 Invite Link: https://discord.com/api/oauth2/authorize?client_id=845426453322530886&permissions=412317248576&scope=bot
