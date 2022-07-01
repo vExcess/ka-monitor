@@ -1,19 +1,37 @@
+var debugging = false;
+
+// Import Dependancies
 const Discord = require("discord.js");
 const fetch = require("node-fetch");
-const client = new Discord.Client();
 const keepAlive = require("./server");
 const jsdom = require("jsdom");
-const {JSDOM} = jsdom;
+const babel = require("@babel/core");
+const { JSDOM } = jsdom;
 const fs = require('fs');
 const KA_fetch = require('./KA_fetch');
 KA_fetch.nodeFetch = fetch;
+global.acorn = require('./acorn/acorn');
+const JSInterpreter = require('./acorn/interpreter');
+const Processing = require("./ProcessingVC");
+
+var activityCanvas = Processing.createCanvas(500, 224);
+var ctx = activityCanvas.getContext("2d");
+var activityPJS = new Processing.instance(activityCanvas);
+
+// create client
+const client = new Discord.Client({ intents: ["GUILDS", "GUILD_MESSAGES"] });
+
 
 var users = false;
 var nicks = false;
 
-var membersDatabase = JSON.parse(fs.readFileSync("membersDatabase.json", "utf8"));
+var membersDatabase = fs.readFileSync("membersData.json", "utf8");
+if (membersDatabase.length === 0) {
+    membersDatabase = fs.readFileSync("membersDataBackup.txt", "utf8");
+}
+membersDatabase = JSON.parse(membersDatabase);
 
-var serversDatabase = require('./serversDatabase').SERVER_DATA;
+var serversDatabase = require('./serversData').SERVER_DATA;
 
 var programHashes = false;
 
@@ -105,6 +123,9 @@ function searchUsers(input) {
 
     return results;
 }
+
+const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+const weekdays = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
 const alphabet = "abcdefghijklmnopqrstuvwxyz";
 const normFont = "\t\n abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890`~!@#$%^&*()-=_+[]\\{}|;':\",./<>?".split("");
@@ -302,7 +323,15 @@ function authorIsStaff(msg) {
 
 function filterMessage(msg, wordList, logChannel, p) {
     // get lowercase of message
-    var lowMsg = msg.content;
+    var lowMsg = msg.content + " ";
+    
+    // removes links
+    while (lowMsg.includes("http")) {
+        var linkStart = lowMsg.indexOf("http");
+        var linkStop = lowMsg.slice(linkStart).indexOf(" ");
+        lowMsg = lowMsg.slice(0, linkStart) + lowMsg.slice(linkStart + linkStop, lowMsg.length);
+    }
+    
     if (typeof lowMsg === "string") {
         lowMsg = lowMsg.toLowerCase();
     } else {
@@ -322,7 +351,7 @@ function filterMessage(msg, wordList, logChannel, p) {
     }
 
     // the message to check
-    var msgCheck = "" + lowMsg;
+    var msgCheck = " " + lowMsg + " ";
 
     var isEmbed = false;
     // add embeds content to msgCheck
@@ -330,9 +359,9 @@ function filterMessage(msg, wordList, logChannel, p) {
         isEmbed = true;
         msgCheck += msg.embeds[0].description.toLowerCase();
     }
-
+    
     // remove symbols
-    msgCheck = msgCheck.replaceAll("\n", " ").replaceAll("  ", " ").replaceAll("'", "").replaceAll("/", " ");
+    msgCheck = " " + msgCheck.replaceAll("\n", " ").replaceAll("  ", " ").replaceAll("'", "").replaceAll("/", " ") + " ";
     
     var symbolsToRemove = "~!#%^&*()-=_+[]\\{};':\",.<>?";
     var newMsgCheck = "";
@@ -359,6 +388,10 @@ function filterMessage(msg, wordList, logChannel, p) {
     for (var i = 0; i < msgCheck.length; i++) {
         var tok = msgCheck[i].toLowerCase();
         var hasLetter = false;
+
+        if (tok.charAt(tok.length - 1) === "s") {
+            tok = tok.slice(0, tok.length - 1);
+        }
         
         for (var j = 0; j < tok.length; j++) {
             if (alphabet.includes(tok.charAt(j))) {
@@ -474,22 +507,51 @@ function onCommand_ping(msg, client) {
 }
 
 function onCommand_help(msg) {
-    msg.channel.send(
-        "```\n" +
-        "online\n\n" +
-        "ping\n\n" +
-        "invite\n\n" +
-        "github\n\n" +
-        "update\n\tprograms\n\n" +
-        "plagiarism [PROGRAM_ID]\n\n" +
-        "get\n\thot [NUMBER]\n\trecent [NUMBER]\n\tvotes [NUMBER]\n\tKAuser [KA_USERNAME/KAID]\n\tprofilepic [@USER]\n\tdiscordId [@USER]\n\tguildId [@USER]\n\troles [@USER]\n\n" +
-        "search\n\tuser [NICKNAME]\n\tgoogle [SEARCH QUERY]\n\n" +
-        "coolify\n\tnormal [WORDS]\n\tgothic [WORDS]\n\toutline [WORDS]\n\tmonospace [WORDS]\n\tbubble [WORDS]\n\tcursive [WORDS]\n\n" +
-        "wyr\n\n" +
-        "define [WORD/PHRASE]\n\n" +
-        "set \n\tprefix [PREFIX]\n\tlogs [CHANNEL_ID]\n\n" +
-        "swearFilter [ON/OFF/RESET/TEST/ADD]\n\tadd [WORD]\n\tremove[WORD]" +
-        "```"
+    msg.channel.send("```" + `
+ping
+invite
+github (alias for invite)
+update
+    programs
+plagiarism [PROGRAM_ID]
+get
+    hot [NUMBER]
+    recent [NUMBER]
+    votes [NUMBER]
+    KAuser [KA_USERNAME/KAID]
+    profilePic [*@USER*]
+    pfp (alis for profilePic)
+    discordId [*@USER*]
+    guildId [*@USER*]
+    roles [*@USER*]
+    sus [*@USER*]
+    activity [*@USER*]
+search
+    user [NICKNAME]
+    google [SEARCH QUERY]
+    images [SEARCH QUERY]
+coolify
+    normal [WORDS]
+    gothic [WORDS]
+    outline [WORDS]
+    monospace [WORDS]    
+    bubble [WORDS]
+    cursive [WORDS]
+wyr
+define [WORD/PHRASE]
+set
+    prefix [PREFIX]
+    logs [CHANNEL_ID]
+swearFilter [ON/OFF/RESET/TEST/ADD]
+    add [WORD]
+    remove[WORD]
+leaderboard
+    sus
+    activity
+    pottymouth
+eval [CODE] (code must be in code block)
+translate "[WORD/PHRASE]" [ORIGIN_LANG] => [*TARGET_LANG*]
+` + "```"
     );
 }
 
@@ -526,7 +588,7 @@ function onCommand_update(msg, splitMsg) {
                             programHashes["_" + program_._id] = [data.title, Array.from(hashedCode).join(',')];
 
                             if (program_.idx1 === targetRecurves && program_.idx2 === 49) {
-                                fs.writeFileSync('programsDatabase.js', "exports.KA_PROGRAMHASHES = " + JSON.stringify(programHashes), 'utf-8');
+                                fs.writeFileSync('programsData.js', "exports.KA_PROGRAMHASHES = " + JSON.stringify(programHashes), 'utf-8');
                                 msg.channel.send("Program Database Updated");
                             }
                         }
@@ -621,11 +683,11 @@ function onCommand_plagiarism(msg, splitMsg, serverData) {
                     exampleEmbed.addField(possibles[i][2] + " lines that match", "[" + possibles[i][0] + "](https://www.khanacademy.org/computer-programming/i/" + possibles[i][1] + ")");
                 }
 
-                exampleEmbed.setColor("#14bf96");
+                exampleEmbed.setColor("#1fab55");
                 exampleEmbed.setTitle("**Results for: " + title + "**");
                 exampleEmbed.setURL("https://www.khanacademy.org/computer-programming/i/" + splitMsg[1]);
                 msg.channel.send({
-                    embed: exampleEmbed
+                    embeds: [exampleEmbed]
                 });
                 serverData.busy = false;
 
@@ -787,7 +849,7 @@ function onCommand_get(msg, splitMsg, mentionedUser) {
 
                 // create embed
                 const kaUserEmbed = new Discord.MessageEmbed()
-                    .setColor("#14bf96")
+                    .setColor("#1fab55")
                     .setTitle("**" + data.user.nickname + "**")
                     .setURL("https://www.khanacademy.org/profile/" + data.user.kaid);
 
@@ -879,7 +941,7 @@ function onCommand_get(msg, splitMsg, mentionedUser) {
                                     // set description and send embed
                                     kaUserEmbed.setDescription(contentString);
                                     msg.channel.send({
-                                        embed: kaUserEmbed
+                                        embeds: [kaUserEmbed]
                                     });
                                 });
                             }
@@ -890,7 +952,7 @@ function onCommand_get(msg, splitMsg, mentionedUser) {
         );
     }
 
-    if (splitMsg[1] === "sus" || splitMsg[1] === "susness") {
+    if (splitMsg[1] === "sus") {
         if (!mentionedUser) {
             mentionedUser = msg.member;
         } else if (!mentionedUser.id) {
@@ -912,6 +974,108 @@ function onCommand_get(msg, splitMsg, mentionedUser) {
             );
         }
     }
+
+    if (splitMsg[1] === "activity") {
+        if (!mentionedUser) {
+            mentionedUser = msg.member;
+        } else if (!mentionedUser.id) {
+            msg.channel.send("Not a valid user.");
+            return;
+        }
+        
+        if (!membersDatabase[mentionedUser.id]) {
+            msg.channel.send("No data for that user.");
+        } else {
+            var member = membersDatabase[mentionedUser.id];
+            var lastMessageTime = member.lastMessageTime;
+            var activityHours = member.hoursActivity;
+
+            var timezoneOffsets = {
+                pacific: 8,
+                mountain: 7,
+                central: 6,
+                eastern: 5
+            };
+
+            var timezoneNames = {
+                pacific: "America/Los_Angeles",
+                mountain: "America/Boise",
+                central: "America/Chicago",
+                eastern: "America/New_York"
+            };
+
+            var input2 = splitMsg[2].includes("<@") ? splitMsg[3] : splitMsg[2];
+            var offset = timezoneOffsets[splitMsg[2]] || 0;
+            var timezone = timezoneNames[splitMsg[2]] || "UTC";
+
+            with (activityPJS) {
+                var scl = 460 / 23;
+                var graphHeight = scl * 10;
+                var maxActivity = 0;
+                for (var i = 0; i < activityHours.length; i++) {
+                    if (activityHours[i] > maxActivity) {
+                        maxActivity = activityHours[i];
+                    }
+                }
+                
+                background(0);
+                
+                stroke(50);
+                fill(255);
+                for (var x = 0; x < 24; x++) {
+                    // vertical lines
+                    line(20 + x * scl, 0, 20 + x * scl, graphHeight);
+                    
+                    // numbers
+                    // text((x % 12) + 1, 20 + x * scl, graphHeight + 16);
+                }
+                for (var y = 0; y <= 10; y++) {
+                    // horizontal lines
+                    line(20, y * scl, 480, y * scl);
+                }
+                
+                function offsetGIdx (x) {
+                    return (x + offset) % 24;
+                }
+                
+                // draw stats
+                stroke(255, 0, 0);
+                for (var i = 0; i < activityHours.length - 1; i++) {
+                    line(
+                        20 + i * scl, 
+                        graphHeight - activityHours[offsetGIdx(i)] / maxActivity * (graphHeight - 5) - 1,
+                        20 + (i + 1) * scl, 
+                        graphHeight - activityHours[offsetGIdx(i + 1)] / maxActivity * (graphHeight - 5) - 1
+                    );
+                }
+            }
+
+            const imgBuff = new Buffer.from(activityCanvas.toDataURL('jpeg', 100).split(",")[1], "base64");
+            const imgAttach = new Discord.MessageAttachment(imgBuff, "activity.png");
+            
+            var d = new Date(lastMessageTime).toLocaleDateString("en-US", {
+              	timeZone: timezone,
+              
+                weekday: 'long', 
+              	year: 'numeric', 
+              	month: 'long', 
+              	day: 'numeric',
+              	hour: 'numeric',
+              	minute: 'numeric',
+              	timeZoneName: 'long'
+            });
+
+            msg.channel.send({
+                content: "```\n" + 
+                member.tag +
+                "\nLast Activity was on: " + d +
+                "\nMessages Sent: " + member.messagesSent +
+                "\nGraph of activity at certain hours of the day:" +
+                "```",
+                files: [imgAttach]
+            });
+        }
+    }
 }
 
 function onCommand_search(msg, splitMsg) {
@@ -926,12 +1090,12 @@ function onCommand_search(msg, splitMsg) {
             exampleEmbed.addField(results[i][0], "[kaid_" + results[i][1] + "](https://www.khanacademy.org/profile/kaid_" + results[i][1] + ")");
         }
 
-        exampleEmbed.setColor("#14bf96");
+        exampleEmbed.setColor("#1fab55");
         exampleEmbed.setTitle("**Search Results (" + results.length + "):**");
         exampleEmbed.setURL("https://www.khanacademy.org/computer-programming/i/4733975100702720");
 
         msg.channel.send({
-            embed: exampleEmbed
+            embeds: [exampleEmbed]
         });
     }
     if (splitMsg[1] === "google" || splitMsg[1] === "bing" || splitMsg[1] === "duckduckgo" || splitMsg[1] === "yahoo") {
@@ -942,44 +1106,51 @@ function onCommand_search(msg, splitMsg) {
         fetch("https://www.google.com/search?q=" + query)
             .then(res => res.text())
             .then(function (text) {
+                const exampleEmbed = new Discord.MessageEmbed();
+                
                 const dom = new JSDOM(text);
-                var results = dom.window.document.getElementsByClassName("ZINbbc xpd O9g5cc uUPGi");
                 var newResults = [];
 
-                const exampleEmbed = new Discord.MessageEmbed();
+                const results = dom.window.document.getElementsByClassName("Gx5Zad fP1Qef xpd EtOod pkphOe");
 
                 for (var i = 0; i < results.length; i++) {
                     var parts = results[i].getElementsByClassName("kCrYT");
+                    var header = parts[0];
+                    var body = parts[1];
 
-                    if (parts[0] && parts[1]) {
-                        if (!parts[0].getElementsByTagName("a")[0]) {
-                            var temp = parts[0].cloneNode();
-                            parts[0] = parts[1].cloneNode();
-                            parts[1] = temp;
+                    if (header && body) {
+                        if (!header.getElementsByTagName("a")[0]) {
+                            var temp = header.cloneNode();
+                            header = body.cloneNode();
+                            body = temp;
                         }
 
-                        var url = parts[0].getElementsByTagName("a");
-                        if (url[0]) {
-                            url = decodeURIComponent(url[0].href.slice(7, url[0].href.indexOf("&sa=")));
+                        // the URL
+                        var link = header.getElementsByTagName("a");
+                        if (link[0]) {
+                            link = decodeURIComponent(link[0].href.slice(7, link[0].href.indexOf("&sa=")));
                         } else {
-                            url = false;
+                            link = false;
                         }
 
-                        var label = parts[0].getElementsByClassName("BNeawe vvjwJb AP7Wnd");
+                        // the title
+                        var label = header.getElementsByClassName("BNeawe vvjwJb AP7Wnd");
                         if (label[0]) {
                             label = label[0].textContent;
                         } else {
                             label = false;
                         }
 
-                        var path = parts[0].getElementsByClassName("BNeawe UPmit AP7Wnd");
+                        // the path
+                        var path = header.getElementsByClassName("BNeawe UPmit AP7Wnd");
                         if (path[0]) {
                             path = path[0].textContent;
                         } else {
                             path = false;
                         }
 
-                        var description = parts[1].getElementsByClassName("BNeawe s3v9rd AP7Wnd");
+                        // the description
+                        var description = body.getElementsByClassName("BNeawe s3v9rd AP7Wnd");
                         if (description[0]) {
                             description = description[0].textContent.split("...")[0];
                             description = description.slice(0, description.length - 1) + "...";
@@ -987,8 +1158,8 @@ function onCommand_search(msg, splitMsg) {
                             description = "";
                         }
 
-                        if (label && url && path) {
-                            newResults.push([label, path, url, description]);
+                        if (label && link && path) {
+                            newResults.push([label, path, link, description]);
                         }
                     }
                 }
@@ -1001,13 +1172,39 @@ function onCommand_search(msg, splitMsg) {
                     }
                 }
 
-                exampleEmbed.setColor("#14bf96");
+                exampleEmbed.setColor("#1fab55");
                 exampleEmbed.setTitle("**Results for: " + query + "**");
 
                 msg.channel.send({
-                    embed: exampleEmbed
+                    embeds: [exampleEmbed]
                 });
 
+            })
+    }
+    if (splitMsg[1] === "images") {
+        var query = msg.content.slice(15, msg.content.length);
+
+        msg.channel.send("Searching...");
+        
+        fetch("https://www.google.com/search?q=" + query + "&tbm=isch")
+            .then(res => res.text())
+            .then(function (text) {
+                fs.writeFile("google.txt", text, ()=>{});
+
+                var links = [];
+                
+                const dom = new JSDOM(text);
+
+                const results = dom.window.document.getElementsByClassName("yWs4tf");
+
+                for (var i = 0; i < Math.min(5, results.length); i++) {
+                    links.push(new Discord.MessageEmbed().setImage(results[i].src));
+                }
+
+                msg.channel.send({
+                    content: "Results:",
+                    embeds: links,
+                }).catch(console.log);
             })
     }
 }
@@ -1102,10 +1299,10 @@ function onCommand_define(msg, lowMsg) {
                 if (entries.length === 0) {
                     entries = dict.getElementsByClassName("one-click-content css-0 e1w1pzze4");
                     msg.channel.send({
-                        embed: {
+                        embeds: [{
                             color: 3447003,
                             description: ("**" + word + "**\n\n" + entries[0].textContent).slice(0, 2000)
-                        }
+                        }]
                     })
                     return;
                 }
@@ -1134,10 +1331,10 @@ function onCommand_define(msg, lowMsg) {
                 }
 
                 msg.channel.send({
-                    embed: {
+                    embeds: [{
                         color: 3447003,
                         description: ("**" + word + "**\n\n" + definitionOutput).slice(0, 2000)
-                    }
+                    }]
                 })
 
             } else {
@@ -1156,29 +1353,29 @@ function onCommand_swearFilter(msg, splitMsg, lowMsg, serverData) {
     if (splitMsg[1] === "on" || splitMsg[1] === "true" || splitMsg[1] === "yes") {
         serverData.swearFilterOn = true;
         msg.channel.send("The swear filter has been turned on in " + msg.guild.name);
-        fs.writeFileSync('serversDatabase.js', "exports.SERVER_DATA = " + JSON.stringify(serversDatabase, null, "  "), 'utf-8');
+        fs.writeFileSync('serversData.js', "exports.SERVER_DATA = " + JSON.stringify(serversDatabase, null, "  "), 'utf-8');
     } else if (splitMsg[1] === "off" || splitMsg[1] === "false" || splitMsg[1] === "no") {
         serverData.swearFilterOn = false;
         msg.channel.send("The swear filter has been turned off in " + msg.guild.name);
-        fs.writeFileSync('serversDatabase.js', "exports.SERVER_DATA = " + JSON.stringify(serversDatabase, null, "  "), 'utf-8');
+        fs.writeFileSync('serversData.js', "exports.SERVER_DATA = " + JSON.stringify(serversDatabase, null, "  "), 'utf-8');
     } else if (splitMsg[1] === "test") {
         msg.channel.send({
-            embed: {
+            embeds: [{
                 color: 3447003,
                 description: "what the **hell**"
-            }
+            }]
         });
     } else if (splitMsg[1] === "reset") {
         serverData.bannedWords = defaultBannedWords.slice(0, defaultBannedWords.length);
         msg.channel.send("The swear filter has been reset in " + msg.guild.name);
-        fs.writeFileSync('serversDatabase.js', "exports.SERVER_DATA = " + JSON.stringify(serversDatabase, null, "  "), 'utf-8');
+        fs.writeFileSync('serversData.js', "exports.SERVER_DATA = " + JSON.stringify(serversDatabase, null, "  "), 'utf-8');
     } else if (splitMsg[1] === "add") {
         var wrd = lowMsg.slice(lowMsg.indexOf(splitMsg[1]) + splitMsg[1].length + 1, lowMsg.length);
         var wordIdx = serverData.bannedWords.indexOf(wrd);
         if (wordIdx < 0) {
             serverData.bannedWords.push(wrd);
             msg.channel.send("The word `" + wrd + "` has been added to the filter.");
-            fs.writeFileSync('serversDatabase.js', "exports.SERVER_DATA = " + JSON.stringify(serversDatabase, null, "  "), 'utf-8');
+            fs.writeFileSync('serversData.js', "exports.SERVER_DATA = " + JSON.stringify(serversDatabase, null, "  "), 'utf-8');
         } else {
             msg.channel.send("The word `" + wrd + "` is already on the filter.");
         }
@@ -1188,7 +1385,7 @@ function onCommand_swearFilter(msg, splitMsg, lowMsg, serverData) {
         if (wordIdx >= 0) {
             serverData.bannedWords.splice(wordIdx, 1);
             msg.channel.send("The word `" + wrd + "` has been removed from the filter.");
-            fs.writeFileSync('serversDatabase.js', "exports.SERVER_DATA = " + JSON.stringify(serversDatabase, null, "  "), 'utf-8');
+            fs.writeFileSync('serversData.js', "exports.SERVER_DATA = " + JSON.stringify(serversDatabase, null, "  "), 'utf-8');
         } else {
             msg.channel.send("The word `" + wrd + "` is not on the filter.");
         }
@@ -1204,7 +1401,7 @@ function onCommand_set(msg, splitMsg, serverData) {
     if (splitMsg[1] === "prefix") {
         serverData.prefix = splitMsg[2];
         msg.channel.send("My prefix has been set to `" + serverData.prefix + "`");
-        fs.writeFileSync('serversDatabase.js', "exports.SERVER_DATA = " + JSON.stringify(serversDatabase, null, "  "), 'utf-8');
+        fs.writeFileSync('serversData.js', "exports.SERVER_DATA = " + JSON.stringify(serversDatabase, null, "  "), 'utf-8');
     }
 
     if (splitMsg[1] === "logs") {
@@ -1218,7 +1415,7 @@ function onCommand_set(msg, splitMsg, serverData) {
             msg.channel.send("Channel not found");
         }
 
-        fs.writeFileSync('serversDatabase.js', "exports.SERVER_DATA = " + JSON.stringify(serversDatabase, null, "  "), 'utf-8');
+        fs.writeFileSync('serversData.js', "exports.SERVER_DATA = " + JSON.stringify(serversDatabase, null, "  "), 'utf-8');
     }
 }
 
@@ -1297,9 +1494,220 @@ function onCommand_leaderboard (msg, splitMsg) {
 
 }
 
+function onCommand_translate (msg) {
+    var msgContent = msg.content.slice(11);
+    
+    var lastQuoteIdx = msgContent.length - 1;
+    while (lastQuoteIdx > 0) {
+        if (msgContent.charAt(lastQuoteIdx) === '"') {
+            break;
+        }
+        lastQuoteIdx--;
+    }
+
+    var firstQuoteIdx = msgContent.indexOf('"') + 1;
+    
+    if (firstQuoteIdx === 0 || lastQuoteIdx === 0) {
+        msg.channel.send("Quote to translate not found. Remember to put what you want to translate into quotes.");
+    }
+    
+    var transMsg = msgContent.slice(firstQuoteIdx, lastQuoteIdx);
+    var msgLangs = msgContent.slice(lastQuoteIdx + 2).split("=>");
+    if (msgLangs[0].includes(">")) {
+        msgLangs = msgLangs[0].split(">");
+    }
+    
+    msgLangs[0] = msgLangs[0].toLowerCase().trim();
+    if (msgLangs[1]) {
+        msgLangs[1] = msgLangs[1].toLowerCase().trim();
+    }
+
+    var languages = "auto,detect language|af,afrikaans|sq,albanian|am,amharic|ar,arabic|hy,armenian|as,assamese|ay,aymara|az,azerbaijani|bm,bambara|eu,basque|be,belarusian|bn,bengali|bho,bhojpuri|bs,bosnian|bg,bulgarian|ca,catalan|ceb,cebuano|ny,chichewa|zh-CN,chinese|	zh-CN,chinese (simplified)|zh-TW,chinese (traditional)|co,corsican|hr,croatian|cs,czech|da,danish|dv,dhivehi|doi,dogri|nl,dutch|en,english|eo,esperanto|et,estonian|ee,ewe|tl,filipino|fi,finnish|fr,french|fy,frisian|gl,galician|ka,georgian|de,german|el,greek|gn,guarani|gu,gujarati|ht,haitian creole|ha,hausa|haw,hawaiian|iw,hebrew|hi,hindi|hmn,hmong|hu,hungarian|is,icelandic|ig,igbo|ilo,ilocano|id,indonesian|ga,irish|it,italian|ja,japanese|jw,javanese|kn,kannada|kk,kazakh|km,khmer|rw,kinyarwanda|gom,konkani|ko,korean|kri,krio|ku,kurdish (kurmanji)|ckb,kurdish (sorani)|ky,kyrgyz|lo,lao|la,latin|lv,latvian|ln,lingala|lt,lithuanian|lg,luganda|lb,luxembourgish|mk,macedonian|mai,maithili|mg,malagasy|ms,malay|ml,malayalam|mt,maltese|mi,maori|mr,marathi|mni-Mtei,meiteilon (manipuri)|lus,mizo|mn,mongolian|my,myanmar (burmese)|ne,nepali|no,norwegian|or,odia (oriya)|om,oromo|ps,pashto|fa,persian|pl,polish|pt,portuguese|pa,punjabi|qu,quechua|ro,romanian|ru,russian|sm,samoan|sa,sanskrit|gd,scots gaelic|nso,sepedi|sr,serbian|st,sesotho|sn,shona|sd,sindhi|si,sinhala|sk,slovak|sl,slovenian|so,somali|es,spanish|su,sundanese|sw,swahili|sv,swedish|tg,tajik|ta,tamil|tt,tatar|te,telugu|th,thai|ti,tigrinya|ts,tsonga|tr,turkish|tk,turkmen|ak,twi|uk,ukrainian|ur,urdu|ug,uyghur|uz,uzbek|vi,vietnamese|cy,welsh|xh,xhosa|yi,yiddish|yo,yoruba|zu,zulu".split("|").map(l => l.split(","));
+
+    var knowsLanguage = 0;
+    for (var i = 0; i < languages.length; i++) {
+        var lang = languages[i];
+
+        for (var j = 0; j < Math.min(msgLangs.length, 2); j++) {
+            if (msgLangs[j] === lang[1]) {
+                msgLangs[j] = lang[0];
+                knowsLanguage++;
+            }
+        }
+    }
+
+    if (!msgLangs[1]) {
+        msgLangs[1] = "en";
+    }
+
+    if (knowsLanguage === 0) {
+        msg.channel.send("That language is not known.");
+        return;
+    }
+    
+    fetch("https://translate.google.com/_/TranslateWebserverUi/data/batchexecute", {
+        "method": "POST",
+        "headers": {
+            "content-type": "application/x-www-form-urlencoded;charset=UTF-8"
+        },
+        "body": "f.req=" + encodeURIComponent(JSON.stringify([[[process.env['translateToken'], "[[\"" + transMsg + "\",\"" + msgLangs[0] + "\",\"" + msgLangs[1] + "\"]]"]]]))
+    }).then(res => res.text()).then(function (data) {
+        data = data.slice(data.indexOf('\\"') + 2, data.length);
+        data = data.slice(data.indexOf('\\"') + 2, data.length);
+        data = data.slice(data.indexOf('\\"') + 2, data.length);
+        data = data.slice(0, data.indexOf('\\"'));
+        msg.channel.send(data);
+    })
+}
+
+function onCommand_eval (msg) {
+    var code = msg.content.slice(msg.content.indexOf("```"));
+    if (code.slice(0, 5) === "```js") {
+        code = code.slice(code.indexOf("\n") + 1);
+    } else {
+        code = code.slice(code.indexOf("```") + 3);
+    }
+    var endIdx = code.length - 1;
+    while (endIdx > 0) {
+        if (code.charAt(endIdx) === "`" && code.charAt(endIdx - 1) === "`" && code.charAt(endIdx - 2) === "`") {
+            endIdx -= 2;
+            break;
+        }
+        endIdx--;
+    }
+    
+    try {
+        // check that code exists
+        if (code.length === 0) {
+            msg.channel.send("Code block not found");
+            return;
+        }
+
+        // transpile all ES6 to ES5
+        var transpilerOptions = {"presets": [[
+            "@babel/preset-env", {
+                "targets": {
+                    "chrome": "1"
+                }
+            }
+        ]]};
+        code = code.slice(0, code.length - 3);
+        
+        code = babel.transformSync(code, transpilerOptions).code.slice(15);
+    
+        var VM_logs = [];
+
+        // create the interpreter for the VM
+        const myInterpreter = new JSInterpreter.Interpreter(code, function (interpreter, globalObject) {
+            var logToVMLogs = function (data) {
+                VM_logs.push(data.toString());
+            };
+            
+            // create a console for the VM
+            var VM_console = interpreter.nativeToPseudo({});
+            interpreter.setProperty(globalObject, 'console', VM_console);
+            
+            interpreter.setProperty(VM_console, 'log', interpreter.createNativeFunction(logToVMLogs));
+            
+            interpreter.setProperty(globalObject, 'println', interpreter.createNativeFunction(logToVMLogs));
+        });
+        
+        var runStartTime = Date.now();
+        var running = true;
+        var error = false;
+
+        // run the code
+        while (running) {
+            running = myInterpreter.step();
+            
+            if (Date.now() - runStartTime > 3000) {
+                error = true;
+                running = false;
+                msg.channel.send("oh no! Program taking too long to run");
+            }
+        }
+    } catch (err) {
+        error = true;
+        running = false;
+        msg.channel.send("**An Error Has Occured:**\n```diff\n- " + err.toString().slice(0, 1950) + "\n```");
+    }
+
+    console.log("-----------------------------")
+
+    if (!error) {
+        const resultEmbed = new Discord.MessageEmbed();
+
+        resultEmbed.setColor("#1fab55");
+        resultEmbed.addField("**Program Output:**", VM_logs.join("\n").slice(0, 1950));
+        
+        msg.channel.send({
+            embeds: [resultEmbed]
+        });
+    }    
+}
+
+function onCommand_dangerEval (msg) {
+    if (msg.author.id === "480905025112244234") {
+        var code = msg.content.slice(msg.content.indexOf("```"));
+        if (code.slice(0, 5) === "```js") {
+            code = code.slice(code.indexOf("\n") + 1);
+        } else {
+            code = code.slice(code.indexOf("```") + 3);
+        }
+        var endIdx = code.length - 1;
+        while (endIdx > 0) {
+            if (code.charAt(endIdx) === "`" && code.charAt(endIdx - 1) === "`" && code.charAt(endIdx - 2) === "`") {
+                endIdx -= 2;
+                break;
+            }
+            endIdx--;
+        }
+    
+        // check that code exists
+        if (code.length === 0) {
+            msg.channel.send("Code block not found");
+            return;
+        }
+    
+        code = code.slice(0, code.length - 3);
+
+        try {
+            code = `
+const resultEmbed = new Discord.MessageEmbed();
+
+var evalResults = "";
+
+var println = function (txt) {
+    evalResults += txt + "\\n";
+};
+
+var done = function () {
+    resultEmbed.setColor("#1fab55");
+    resultEmbed.addField("**Program Output:**", ">>> " + evalResults.slice(0, 1950));
+    msg.channel.send({ embeds: [resultEmbed] });
+};
+
+${code}
+            `;
+
+            new Function(
+                "Discord", "msg", "client", 
+                code
+            )(Discord, msg, client);
+            
+        } catch (err) {
+            console.log(err);
+            msg.channel.send("**An Error Has Occured:**\n```diff\n- " + err.toString().slice(0, 1950) + "\n```");
+        }
+        
+    } else {
+        msg.channel.send("You don't have permission to use danger eval");
+    }
+}
+
 
 // ---------- ON MESSAGE ---------- //
-client.on("message", function (msg) {
+client.on("messageCreate", function (msg) {
     try {
         if (msg.guild) {
             if (!membersDatabase[msg.author.id] && !msg.author.bot) {
@@ -1309,7 +1717,7 @@ client.on("message", function (msg) {
                     susnessCount: 0,
                     messagesSent: 0,
                     lastMessageTime: 0,
-                    hoursOnline: [],
+                    hoursActivity: new Array(24).fill(0),
                     guilds: []
                 };
             }
@@ -1325,12 +1733,6 @@ client.on("message", function (msg) {
                 memberData.lastMessageTime = Date.now();
 
                 var hour = new Date().getHours();
-                if (!memberData.hoursActivity) {
-                    memberData.hoursActivity = [];
-                }
-                if (!memberData.hoursActivity[hour]) {
-                    memberData.hoursActivity[hour] = 0;
-                }
                 memberData.hoursActivity[hour]++;
                 
                 if (!memberData.guilds.includes(msg.guild.id)) {
@@ -1412,9 +1814,9 @@ client.on("message", function (msg) {
         }
 
         var mentionedUser = msg.mentions.users.first();
-
+        console.log(JSON.stringify(msg.content));
         // if pinged bot
-        if (msg.content === "<@!845426453322530886>" && mentionedUser) {
+        if (msg.content.trim() === "<@845426453322530886>" && mentionedUser) {
             var memberTarget = msg.guild.members.cache.get(mentionedUser.id);
             if (memberTarget && memberTarget.user.id === "845426453322530886") {
                 msg.channel.send("My prefix is `" + serverData.prefix + "`");
@@ -1427,8 +1829,7 @@ client.on("message", function (msg) {
         }
 
         // commands
-        switch (splitMsg[0].replace(p, "")) {
-            case "online":
+        switch (lowMsg.replace("\n", " ").split(" ")[0].replace(p, "")) {
             case "ping":
                 onCommand_ping(msg, client);
                 break;
@@ -1437,8 +1838,7 @@ client.on("message", function (msg) {
                 onCommand_help(msg);
                 break;
 
-            case "invite":
-            case "github":
+            case "invite": case "github":
                 onCommand_github(msg);
                 break;
 
@@ -1480,6 +1880,18 @@ client.on("message", function (msg) {
 
             case "leaderboard":
                 onCommand_leaderboard(msg, splitMsg);
+                break;
+
+            case "translate":
+                onCommand_translate(msg);
+                break;
+
+            case "eval":
+                onCommand_eval(msg);
+                break;
+
+            case "dangereval":
+                onCommand_dangerEval(msg);
                 break;
 
             case "temp":
@@ -1571,19 +1983,41 @@ client.on("ready", function () {
 
 // ---------- ON DEBUG ---------- //
 client.on('debug', function (e) {
-    if (!e.includes("token") && !e.includes(process.env['myToken'])) {
-        // console.log(e);
+    if (
+        !e.includes("token") && 
+        !e.includes(process.env['myToken']) && 
+        !e.includes("Heartbeat") && 
+        !e.toLowerCase().includes("shard")
+    ) {
+        console.log(e);
     }
 });
 
 // init
 keepAlive();
-client.login(process.env['myToken']);
+var loginInterval;
+function attemptLogin () {
+    console.log("Requested to login");
+    
+    var lastLoginAttempt = Number(fs.readFileSync("loginTime.txt", "utf8"));
+    
+    if (debugging || Date.now() - lastLoginAttempt > 1000 * 60 * 5) {
+        lastLoginAttempt = Date.now();
+        fs.writeFile("loginTime.txt", lastLoginAttempt.toString(), ()=>{});
+        console.log("Attempting to log in...");
+        client.login(process.env['myToken']);
+        clearInterval(loginInterval);
+    } else {
+        console.log("Waiting to login...");
+    }
+}
+loginInterval = setInterval(attemptLogin, 1000);
 
 // update members database every minute
 setInterval(function () {
-    fs.writeFile("membersDatabase.json", JSON.stringify(membersDatabase, null, "  "), ()=>{});
+    fs.writeFile("membersData.json", JSON.stringify(membersDatabase, null, "  "), ()=>{});
 }, 1000 * 60);
+
 
 // log time
 setInterval(function () {
