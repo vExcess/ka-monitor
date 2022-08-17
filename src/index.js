@@ -1,4 +1,4 @@
-var debugging = true;
+var debugging = false;
 
 // Import Dependancies
 const Discord = require("discord.js");
