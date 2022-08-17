@@ -1,4 +1,4 @@
-var debugging = false;
+var debugging = true;
 
 // Import Dependancies
 const Discord = require("discord.js");
@@ -19,7 +19,10 @@ var ctx = activityCanvas.getContext("2d");
 var activityPJS = new Processing.instance(activityCanvas);
 
 // create client
-const client = new Discord.Client({ intents: ["GUILDS", "GUILD_MESSAGES"] });
+const client = new Discord.Client({
+    intents: ["GUILDS", "GUILD_MESSAGES", "DIRECT_MESSAGES"],
+    partials: ["CHANNEL"]
+});
 
 
 var users = false;
@@ -332,12 +335,7 @@ function filterMessage(msg, wordList, logChannel, p) {
         lowMsg = lowMsg.slice(0, linkStart) + lowMsg.slice(linkStart + linkStop, lowMsg.length);
     }
     
-    if (typeof lowMsg === "string") {
-        lowMsg = lowMsg.toLowerCase();
-    } else {
-        console.log("ERROR: lowMsg is not typeof string" + lowMsg);
-        return;
-    }
+    lowMsg = lowMsg.toLowerCase();
 
     // get tokens of message
     var splitMsg = lowMsg.split(" ");
@@ -355,9 +353,13 @@ function filterMessage(msg, wordList, logChannel, p) {
 
     var isEmbed = false;
     // add embeds content to msgCheck
-    if (msg.embeds[0] && msg.embeds[0].description) {
-        isEmbed = true;
-        msgCheck += msg.embeds[0].description.toLowerCase();
+    if (msg.embeds) {
+        for (var i = 0; i < msg.embeds.length; i++) {
+            if (msg.embeds[i].description) {
+                isEmbed = true;
+                msgCheck += msg.embeds[i].description.toLowerCase();
+            }
+        }
     }
     
     // remove symbols
@@ -379,9 +381,16 @@ function filterMessage(msg, wordList, logChannel, p) {
     for (var i = 0; i < whiteListedWords.length; i++) {
         if (!wordList.includes(whiteListedWords[i])) {
             msgCheck = msgCheck.replaceAll(whiteListedWords[i] + " ", " ");
-            // msgCheck = msgCheck.replaceAll(whiteListedWords[i].split("").reverse().join(""), "");
         }
     }
+
+    // remove a because it causes a lot of problems
+    while (msgCheck.includes(" a ")) {
+        msgCheck = msgCheck.replaceAll(" a ", " ");
+    }
+
+    // removing ing
+    msgCheck = msgCheck.replaceAll("ing ", " ");
 
     // remove numbers
     msgCheck = msgCheck.split(" ");
@@ -510,6 +519,7 @@ function onCommand_help(msg) {
     msg.channel.send("```" + `
 ping
 invite
+tictactoe
 github (alias for invite)
 update
     programs
@@ -545,6 +555,7 @@ set
 swearFilter [ON/OFF/RESET/TEST/ADD]
     add [WORD]
     remove[WORD]
+delete [NUMBER]
 leaderboard
     sus
     activity
@@ -757,8 +768,9 @@ function onCommand_get(msg, splitMsg, mentionedUser) {
         });
 
         if (imgLink) {
-            msg.channel.send(mentionedUser.username + (mentionedUser.username.charAt(mentionedUser.username.length - 1).toLowerCase() === "s" ? "" : "'s") + " Profile Image:", {
-                files: [imgLink]
+            msg.channel.send({
+                content: mentionedUser.username + (mentionedUser.username.charAt(mentionedUser.username.length - 1).toLowerCase() === "s" ? "" : "'s") + " Profile Image:",
+                files: [new Discord.MessageAttachment(imgLink)]
             });
         } else {
             msg.channel.send("Image not found");
@@ -1004,7 +1016,7 @@ function onCommand_get(msg, splitMsg, mentionedUser) {
                 eastern: "America/New_York"
             };
 
-            var input2 = splitMsg[2].includes("<@") ? splitMsg[3] : splitMsg[2];
+            var input2 = splitMsg[2] && splitMsg[2].includes("<@") ? splitMsg[3] : splitMsg[2];
             var offset = timezoneOffsets[splitMsg[2]] || 0;
             var timezone = timezoneNames[splitMsg[2]] || "UTC";
 
@@ -1468,7 +1480,7 @@ function onCommand_leaderboard (msg, splitMsg) {
         msg.channel.send(content + "```");
     }
 
-    if (splitMsg[1] === "sus" || splitMsg[1] === "susness") {
+    if (splitMsg[1] === "sus") {
         var membersArray = [];
         for (var memberId in membersDatabase) {
             var member = membersDatabase[memberId];
@@ -1687,7 +1699,12 @@ var done = function () {
     msg.channel.send({ embeds: [resultEmbed] });
 };
 
-${code}
+try {
+    ${code}
+} catch (err) {
+    console.log(err);
+    msg.channel.send("**An Error Has Occured:**\\n\`\`\`diff\\n- " + err.toString().slice(0, 1950) + "\\n\`\`\`");
+}
             `;
 
             new Function(
@@ -1705,6 +1722,56 @@ ${code}
     }
 }
 
+function onCommand_delete (msg, splitMsg) {
+    if (!authorIsStaff(msg)) {
+        msg.channel.send("You do not have permission to use that command.");
+        return;
+    }
+
+    if (Number(splitMsg[1])) {
+        msg.channel.bulkDelete(Number(splitMsg[1]) + 1);
+    }
+}
+
+function onCommand_spam (msg) {
+    if (msg.author.id === "480905025112244234") {
+        for (var i = 0; i < 50; i++) {
+            setTimeout(function () {
+                msg.channel.send("<@746117782655205426> stop is gay!");
+            }, Math.random() * 10 * 1000);
+        }
+    }
+}
+
+function onCommand_tictactoe (msg, mentionedUser) {
+    var rows = [];
+
+    console.log(mentionedUser)
+
+    for (var i = 0; i < 3; i++) {
+        var actionRow = new Discord.MessageActionRow().addComponents(
+            new Discord.MessageButton()
+                .setCustomId(i + '0')
+                .setLabel(' ')
+                .setStyle("SECONDARY"),
+            new Discord.MessageButton()
+                .setCustomId(i + '1')
+                .setLabel(' ')
+                .setStyle("SECONDARY"),
+            new Discord.MessageButton()
+                .setCustomId(i + '2')
+                .setLabel(' ')
+                .setStyle("SECONDARY"),
+        );
+        
+        rows.push(actionRow);
+    }
+
+    msg.channel.send({
+        content: `**Tic Tac Toe** | ${msg.author.tag} vs AI | ${msg.author.tag}'s turn`,
+        components: rows
+    });
+}
 
 // ---------- ON MESSAGE ---------- //
 client.on("messageCreate", function (msg) {
@@ -1894,6 +1961,18 @@ client.on("messageCreate", function (msg) {
                 onCommand_dangerEval(msg);
                 break;
 
+            case "spam":
+                onCommand_spam(msg);
+                break;
+
+            case "delete":
+                onCommand_delete(msg, splitMsg);
+                break;
+
+            case "tictactoe":
+                onCommand_tictactoe(msg, mentionedUser);
+                break;
+                
             case "temp":
                 
                 break;
@@ -1903,6 +1982,176 @@ client.on("messageCreate", function (msg) {
     }
 });
 
+var tictactoe = {
+    isRowWinner: function(rows, whichrow, token) {
+        if (rows[whichrow][0] === token && rows[whichrow][1] === token && rows[whichrow][2] === token) {
+            return true;
+        }
+        return false;
+    },
+    isColumnWinner: function(rows, whichcolumn, token) {
+        if (rows[0][whichcolumn] === token && rows[1][whichcolumn] === token && rows[2][whichcolumn] === token) {
+            return true;
+        }
+        return false;
+    },
+    isWinner: function (rows, token) {
+        if (this.isRowWinner(rows, 0, token)) {
+            return true;
+        }
+        if (this.isRowWinner(rows, 1, token)) {
+            return true;
+        }
+        if (this.isRowWinner(rows, 2, token)) {
+            return true;
+        }
+        
+        if (this.isColumnWinner(rows, 0, token)) {
+            return true;
+        }
+        if (this.isColumnWinner(rows, 1, token)) {
+            return true;
+        }
+        if (this.isColumnWinner(rows, 2, token)) {
+            return true;
+        }
+        
+        if (rows[0][0] === token && rows[1][1] === token && rows[2][2] === token) {
+            return true;    
+        }
+        if (rows[2][0] === token && rows[1][1] === token && rows[0][2] === token) {
+            return true;    
+        }
+        return false;
+    },
+    isBoardFull: function (rows) {
+        for (var i = 0; i < 3; i++) {
+            if (rows[0][i] === null) {
+                return false;
+            }
+            if (rows[1][i] === null) {
+                return false;
+            }
+            if (rows[2][i] === null) {
+                return false;
+            }
+        }
+        return true;
+    },
+    moveAI: function (rows) {
+        var rplace = Math.floor(random(0, 3));
+        var cplace = Math.floor(random(0, 3));
+        
+        if (rows[1][1] === null && Math.random() < 0.5) {
+            rplace = 1;
+            cplace = 1;
+        }
+        
+        for (var r = 0; r < 3; r++) {
+            for (var c = 0; c < 3; c++) {
+                var isNull = false;
+                if (rows[r][c] === null) {
+                    rows[r][c] = "X";
+                    isNull = true;
+                }
+                if (this.isWinner(rows, "X")) {
+                    rplace = r;
+                    cplace = c;
+                }
+                if (isNull) {
+                    rows[r][c] = null;
+                }
+            }
+        }
+        
+        for (var r = 0; r < 3; r++) {
+            for (var c = 0; c < 3; c++) {
+                var isNull = false;
+                if (rows[r][c] === null) {
+                    rows[r][c] = "O";
+                    isNull = true;
+                }
+                if (this.isWinner(rows, "O")) {
+                    rplace = r;
+                    cplace = c;
+                }
+                if (isNull) {
+                    rows[r][c] = null;
+                }
+            }
+        }
+        
+        return [rplace, cplace];
+    }
+};
+
+// ---------- ON BUTTON CLICKS ---------- //
+client.on("interactionCreate", function (interaction) {
+    if (interaction.isButton()) {
+        let msg = interaction.message;
+
+        let datas = msg.content.split(" | ");
+
+        let players = datas[1].split(" vs ");
+        let turn = datas[2].slice(0, datas[2].length - 7);
+
+        if (interaction.user.tag !== players[0] || interaction.user.tag !== turn) {
+            return;
+        }
+        
+        let coords = interaction.customId.split("").map(Number);
+
+        let table = [], rows, winner = null;
+        for (var i = 0; i < msg.components.length; i++) {
+            table.push(msg.components[i].components);
+        }
+
+        let btn = table[coords[0]][coords[1]];
+        if (btn.label === " ") {
+            interaction.deferUpdate();
+            
+            btn.setLabel("X");
+            btn.setStyle("SUCCESS");
+
+            rows = table.map(function (row) {
+                return row.map(function (btn) {
+                    return btn.label === " " ? null : btn.label;
+                });
+            });
+    
+            if (tictactoe.isWinner(rows, "X")) {
+                winner = "X Wins!";
+            } else {    
+                let botCoords = tictactoe.moveAI(rows);
+                let botChoice = table[botCoords[0]][botCoords[1]];
+                
+                botChoice.setLabel("O");
+                botChoice.setStyle("DANGER");
+    
+                rows = table.map(function (row) {
+                    return row.map(function (btn) {
+                        return btn.label === " " ? null : btn.label;
+                    });
+                });
+    
+                if (tictactoe.isWinner(rows, "O")) {
+                    winner = "O Wins!";
+                }
+            }
+    
+            if (tictactoe.isBoardFull(rows)) {
+                winner = "Tie Game!";
+            }
+
+            setTimeout(function () {
+                msg.edit({
+                    content: `**Tic Tac Toe** | ${players[0]} vs ${players[1]} | ${players[0]}'s turn`,
+                    components: msg.components
+                });
+            }, 100);
+        }
+    }
+});
 
 // ---------- ON MESSAGE UPDATE ---------- //
 client.on("messageUpdate", function (oldMsg, newMsg) {
