@@ -3,7 +3,7 @@ var debugging = false;
 // Import Dependancies
 const Discord = require("discord.js");
 const fetch = require("node-fetch");
-const keepAlive = require("./server");
+const httpServer = require("./server");
 const jsdom = require("jsdom");
 const babel = require("@babel/core");
 const { JSDOM } = jsdom;
@@ -324,9 +324,8 @@ function authorIsStaff(msg) {
     return isStaff;
 }
 
-function filterMessage(msg, wordList, logChannel, p) {
-    // get lowercase of message
-    var lowMsg = msg.content + " ";
+function swearFilter(msg, wordList) {
+    lowMsg = msg;
     
     // removes links
     while (lowMsg.includes("http")) {
@@ -337,30 +336,8 @@ function filterMessage(msg, wordList, logChannel, p) {
     
     lowMsg = lowMsg.toLowerCase();
 
-    // get tokens of message
-    var splitMsg = lowMsg.split(" ");
-
-    // check if is a swearfilter command
-    if (
-        (splitMsg[0] === p + "swearfilter" && (splitMsg[1] === "add" || splitMsg[1] === "remove")) ||
-        (msg.content.slice(0, 10) === "The word `" && msg.author.bot)
-    ) {
-        return false;
-    }
-
     // the message to check
     var msgCheck = " " + lowMsg + " ";
-
-    var isEmbed = false;
-    // add embeds content to msgCheck
-    if (msg.embeds) {
-        for (var i = 0; i < msg.embeds.length; i++) {
-            if (msg.embeds[i].description) {
-                isEmbed = true;
-                msgCheck += msg.embeds[i].description.toLowerCase();
-            }
-        }
-    }
     
     // remove symbols
     msgCheck = " " + msgCheck.replaceAll("\n", " ").replaceAll("  ", " ").replaceAll("'", "").replaceAll("/", " ") + " ";
@@ -470,13 +447,46 @@ function filterMessage(msg, wordList, logChannel, p) {
         }
     }
 
-    deletePost = deletePost && msg.channel.type !== 'dm';
+    return {
+        isBad: deletePost,
+        badWord: badWord
+    };
+}
+
+function filterMessage(msg, wordList, logChannel, p) {
+    // get lowercase of message
+    var msgCheck = msg.content;
+
+    // get tokens of message
+    var splitMsg = msgCheck.toLowerCase().split(" ");
+
+    // check if is a swearfilter command
+    if (
+        (splitMsg[0] === p + "swearfilter" && (splitMsg[1] === "add" || splitMsg[1] === "remove")) ||
+        (msg.content.slice(0, 10) === "The word `" && msg.author.bot)
+    ) {
+        return false;
+    }
+
+    var isEmbed = false;
+    // add embeds content to msgCheck
+    if (msg.embeds) {
+        for (var i = 0; i < msg.embeds.length; i++) {
+            if (msg.embeds[i].description) {
+                isEmbed = true;
+                msgCheck += msg.embeds[i].description.toLowerCase();
+            }
+        }
+    }
+    
+    var filterRes = swearFilter(msgCheck, wordList);
+    var deletePost = filterRes.isBad && msg.channel.type !== 'dm';
 
     // delete post
     if (deletePost) {
-        console.log(msgCheck);
+        console.log("DELETED: " + msgCheck);
         
-        var msgToSend = "Deleted message because it contained: `" + badWord + "`\nMessage Content:\n\n" + (isEmbed ? msg.embeds[0].description : msg.content);
+        var msgToSend = "Deleted message because it contained: `" + filterRes.badWord + "`\nMessage Content:\n\n" + (isEmbed ? msg.embeds[0].description : msg.content);
 
         var channel = msg.channel;
         var username = msg.author.tag;
@@ -516,54 +526,182 @@ function onCommand_ping(msg, client) {
 }
 
 function onCommand_help(msg) {
-    msg.channel.send("```" + `
-ping
-invite
-tictactoe
-github (alias for invite)
-update
-    programs
-plagiarism [PROGRAM_ID]
-get
-    hot [NUMBER]
-    recent [NUMBER]
-    votes [NUMBER]
-    KAuser [KA_USERNAME/KAID]
-    profilePic [*@USER*]
-    pfp (alis for profilePic)
-    discordId [*@USER*]
-    guildId [*@USER*]
-    roles [*@USER*]
-    sus [*@USER*]
-    activity [*@USER*]
-search
-    user [NICKNAME]
-    google [SEARCH QUERY]
-    images [SEARCH QUERY]
-coolify
-    normal [WORDS]
-    gothic [WORDS]
-    outline [WORDS]
-    monospace [WORDS]    
-    bubble [WORDS]
-    cursive [WORDS]
-wyr
-define [WORD/PHRASE]
-set
-    prefix [PREFIX]
-    logs [CHANNEL_ID]
-swearFilter [ON/OFF/RESET/TEST/ADD]
-    add [WORD]
-    remove[WORD]
-delete [NUMBER]
-leaderboard
-    sus
-    activity
-    pottymouth
-eval [CODE] (code must be in code block)
-translate "[WORD/PHRASE]" [ORIGIN_LANG] => [*TARGET_LANG*]
-` + "```"
-    );
+    var helpEmbed = {
+        "type": "rich",
+        "title": "Commands",
+        "description": "Note: \\*SOMETHING\\* means that the argument is optional.\nNot all commands are listed here at the moment.",
+        "color": "#1fab55",
+        "fields": [
+            {
+                "name": "ping",
+                "value": "check latency",
+                "inline": true
+            },
+          	{
+                "name": "tictactoe",
+                "value": "play a game of tic-tac-toe",
+                "inline": true
+            },
+            {
+                "name": "github",
+                "value": "sends bot's github repo",
+                "inline": true
+            },
+            {
+                "name": "update programs",
+                "value": "updates my program database",
+                "inline": true
+            },
+            {
+                "name": "plagiarism [PROGRAM_ID]",
+                "value": "checks if a program is potentially plagiarised",
+                "inline": true
+            },
+            {
+                "name": "get hot [NUMBER]",
+                "value": "gets data about a program on the hotlist at a certain index",
+                "inline": true
+            },
+            {
+                "name": "get recent [NUMBER]",
+                "value": "gets data about a program on the recents list at a certain index",
+                "inline": true
+            },
+            {
+                "name": "get votes [NUMBER]",
+                "value": "gets data about a program on the votes list at a certain index",
+                "inline": true
+            },
+            {
+                "name": "get KAuser [KA_USERNAME/KAID]",
+                "value": "gets data about a certain KA user",
+                "inline": true
+            },
+            {
+                "name": "get profilePic [\\*@USER\\*]",
+                "value": "gets profile image of pinged user",
+                "inline": true
+            },
+            {
+                "name": "get pfp [\\*@USER\\*]",
+                "value": "alias for get profilePic",
+                "inline": true
+            },
+            {
+                "name": "get discordId [\\*@USER\\*]",
+                "value": "gets discord id of pinged user",
+                "inline": true
+            },
+            {
+                "name": "get guildId",
+                "value": "gets id of current guild",
+                "inline": true
+            },
+            {
+                "name": "get channelId",
+                "value": "gets id of current channel",
+                "inline": true
+            },
+            {
+                "name": "get roles [\\*@USER\\*]",
+                "value": "gets roles of pinged user",
+                "inline": true
+            },
+            {
+                "name": "get sus [\\*@USER\\*]",
+                "value": "gets moderation data about pinged user",
+                "inline": true
+            },
+            {
+                "name": "get activity [\\*@USER\\*]",
+                "value": "gets activity data of pinged user",
+                "inline": true
+            },
+            {
+                "name": "search user [NICKNAME]",
+                "value": "searches for KA users of a certain nickname",
+                "inline": true
+            },
+            {
+                "name": "search google [SEARCH QUERY]",
+                "value": "performs a google search",
+                "inline": true
+            },
+            {
+                "name": "search google [SEARCH QUERY]",
+                "value": "performs a google images search",
+                "inline": true
+            },
+            {
+                "name": "coolify normal [FONT] [TEXT_TO_COOLIFY]",
+                "value": "coolifies text. availible fonts are: normal, gothic, outline, monospace, bubble, cursive",
+                "inline": true
+            },
+            {
+                "name": "wyr",
+                "value": "does a random would you rather question",
+                "inline": true
+            },
+            {
+                "name": "define [WORD/PHRASE]",
+                "value": "sends the definition for a certain word or phrase",
+                "inline": true
+            },
+            {
+                "name": "set prefix [PREFIX]",
+                "value": "changes the bot's prefix for this server",
+                "inline": true
+            },
+            {
+                "name": "set logs [CHANNEL_ID]",
+                "value": "sets what channel to log moderation activity to",
+                "inline": true
+            },
+            {
+                "name": "swearFilter [ON/OFF/RESET/TEST]",
+                "value": "turns the swearfilter on or off or resets it or tests it",
+                "inline": true
+            },
+            {
+                "name": "swearFilter add [WORD]",
+                "value": "add a word to the swear filter",
+                "inline": true
+            },
+            {
+                "name": "swearFilter remove [WORD]",
+                "value": "remove a word from the swear filter",
+                "inline": true
+            },
+            {
+                "name": "delete [NUMBER]",
+                "value": "deletes the past n messages",
+                "inline": true
+            },
+            {
+                "name": "leaderboard [SUS/ACTIVITY/POTTYMOUTH]",
+                "value": "creates a leaderboard of a specified category",
+                "inline": true
+            },
+            {
+                "name": "eval [CODE_BLOCK]",
+                "value": "runs a block of JavaScript code in a strict sandbox",
+                "inline": true
+            },
+            {
+                "name": "translate \"[WORD/PHRASE]\" [ORIGIN_LANGUAGE] => [*TARGET_LANGUAGE*]",
+                "value": "translates input from origin language to target language or english if no target",
+                "inline": true
+            },
+        ],
+        "footer": {
+            "text": "The bot gets rate limited a lot, sorry about that"
+        }
+    };
+    
+    msg.channel.send({
+        content: "KA Monitor Info:",
+        embeds: [helpEmbed]
+    });
 }
 
 function onCommand_github(msg) {
@@ -1242,10 +1380,9 @@ function onCommand_coolify(msg, splitMsg, p) {
     if (splitMsg[1] === "cursive") {
         newData = coolifyText(str, coolFont_cursive);
     }
-    if (splitMsg[1] === "normal") {
-        newData = str.replaceAll(p + "coolify normal", "");
+    if (newData.length > 0) {
+        msg.channel.send(newData).catch(console.log);
     }
-    msg.channel.send(newData).catch(console.log);
 }
 
 function onCommand_wyr(msg) {
@@ -1649,8 +1786,13 @@ function onCommand_eval (msg) {
     if (!error) {
         const resultEmbed = new Discord.MessageEmbed();
 
+        let logTxt = VM_logs.join("\n").slice(0, 1024);
+        if (logTxt.length === 0) {
+            logTxt = "Program exited with EXIT_SUCCESS";
+        }
+
         resultEmbed.setColor("#1fab55");
-        resultEmbed.addField("**Program Output:**", VM_logs.join("\n").slice(0, 1950));
+        resultEmbed.addField("**Program Output:**", logTxt);
         
         msg.channel.send({
             embeds: [resultEmbed]
@@ -1735,10 +1877,13 @@ function onCommand_delete (msg, splitMsg) {
 
 function onCommand_spam (msg) {
     if (msg.author.id === "480905025112244234") {
-        for (var i = 0; i < 50; i++) {
+        let content = msg.content.split(" ");
+        let amt = Number(content[1]);
+        content = content.slice(2, content.length).join(" ");
+        for (var i = 0; i < amt; i++) {
             setTimeout(function () {
-                msg.channel.send("<@746117782655205426> stop is gay!");
-            }, Math.random() * 10 * 1000);
+                msg.channel.send(content);
+            }, Math.random() * amt * 1000);
         }
     }
 }
@@ -1771,6 +1916,10 @@ function onCommand_tictactoe (msg, mentionedUser) {
         content: `**Tic Tac Toe** | ${msg.author.tag} vs AI | ${msg.author.tag}'s turn`,
         components: rows
     });
+}
+
+function onCommand_say (msg) {
+    msg.channel.send(msg.content.slice(msg.content.indexOf(" ") + 1).replaceAll("@", "\\@"));
 }
 
 // ---------- ON MESSAGE ---------- //
@@ -1817,6 +1966,8 @@ client.on("messageCreate", function (msg) {
             console.log("ERROR: msg.content is not typeof string" + msg.content);
             return;
         }
+
+        console.log(msg.author.tag + " - " + JSON.stringify(msg.content));
 
         // get message tokens
         var splitMsg = lowMsg.split(" ");
@@ -1881,7 +2032,7 @@ client.on("messageCreate", function (msg) {
         }
 
         var mentionedUser = msg.mentions.users.first();
-        console.log(JSON.stringify(msg.content));
+        
         // if pinged bot
         if (msg.content.trim() === "<@845426453322530886>" && mentionedUser) {
             var memberTarget = msg.guild.members.cache.get(mentionedUser.id);
@@ -1893,6 +2044,11 @@ client.on("messageCreate", function (msg) {
         // check if has prefix
         if (lowMsg.indexOf(p) !== 0) {
             return;
+        }
+
+        // keep alive
+        if (Math.random() < 0.01) {
+            msg.channel.send("https://KA-Monitor-20.vexcess.repl.co/" + Math.random().toString().replace(".", "") + ".png");
         }
 
         // commands
@@ -1965,7 +2121,7 @@ client.on("messageCreate", function (msg) {
                 onCommand_spam(msg);
                 break;
 
-            case "delete":
+            case "delete": case "clear":
                 onCommand_delete(msg, splitMsg);
                 break;
 
@@ -1973,8 +2129,8 @@ client.on("messageCreate", function (msg) {
                 onCommand_tictactoe(msg, mentionedUser);
                 break;
                 
-            case "temp":
-                
+            case "say":
+                onCommand_say(msg);
                 break;
         }
     } catch (err) {
@@ -2243,7 +2399,6 @@ client.on('debug', function (e) {
 });
 
 // init
-keepAlive();
 var loginInterval;
 function attemptLogin () {
     console.log("Requested to login");
@@ -2262,14 +2417,29 @@ function attemptLogin () {
 }
 loginInterval = setInterval(attemptLogin, 1000);
 
-// update members database every minute
+// update members database every three minutes
 setInterval(function () {
     fs.writeFile("membersData.json", JSON.stringify(membersDatabase, null, "  "), ()=>{});
-}, 1000 * 60);
+}, 1000 * 60 * 3);
 
 
-// log time
+// log time every 5 minutes
 setInterval(function () {
     var d = new Date().toLocaleTimeString();
     console.log(d);
-}, 1000 * 60);
+}, 1000 * 60 * 5);
+
+function keepAlive(){
+    if (client && client.channels && client.channels.cache && client.channels.cache.get) {
+        let pingChannel = client.channels.cache.get("810540153294684195");
+        let pingContent = "https://ka-monitor-20.vexcess.repl.co/" + Math.random().toString().replace(".", "") + ".png";
+        if (pingChannel && pingChannel.send) {
+            pingChannel.send(pingContent);
+        }        
+    }
+}
+
+// ping Discord every 25 minutes
+setInterval(function () {
+    // keepAlive();
+}, 1000 * 60 * 28);
