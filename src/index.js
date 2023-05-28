@@ -1,5 +1,7 @@
 var debugging = false;
 
+process.env = require("./secrets");
+
 // Import Dependancies
 const Discord = require("discord.js");
 const fetch = require("node-fetch");
@@ -8,8 +10,8 @@ const jsdom = require("jsdom");
 const babel = require("@babel/core");
 const { JSDOM } = jsdom;
 const fs = require('fs');
-const KA_fetch = require('./KA_fetch');
-KA_fetch.nodeFetch = fetch;
+const KA_API = require('./KA_API');
+KA_API.nodeFetch = fetch;
 global.acorn = require('./acorn/acorn');
 const JSInterpreter = require('./acorn/interpreter');
 const Processing = require("./ProcessingVC");
@@ -28,9 +30,9 @@ const client = new Discord.Client({
 var users = false;
 var nicks = false;
 
-var membersDatabase = fs.readFileSync("membersData.json", "utf8");
+var membersDatabase = fs.readFileSync("./membersData.json", "utf8");
 if (membersDatabase.length === 0) {
-    membersDatabase = fs.readFileSync("membersDataBackup.txt", "utf8");
+    membersDatabase = fs.readFileSync("./membersDataBackup.txt", "utf8");
 }
 membersDatabase = JSON.parse(membersDatabase);
 
@@ -171,28 +173,6 @@ String.prototype.replaceAll = function (str1, str2) {
         (typeof(str2) == "string") ? str2.replace(/\$/g, "$$$$") : str2
     );
 };
-
-// function shrinkTo2DupChars(s) {
-//     var newS = "";
-//     var idx = 0;
-//     var currChar = s.charAt(idx);
-//     var sLen = s.length;
-
-//     while (idx < sLen) {
-//         var currRepeats = 0;
-//         while (s.charAt(idx + 1) === currChar) {
-//             idx++;
-//             currRepeats++;
-//         }
-//         idx -= currRepeats > 0 ? 1 : 0;
-
-//         newS += currChar;
-//         idx++;
-//         currChar = s.charAt(idx);
-//         currRepeats = 0;
-//     }
-//     return newS;
-// }
 
 function removeDupChars (str) {
     var newStr = "";
@@ -519,10 +499,16 @@ function filterMessage(msg, wordList, logChannel, p) {
     return deletePost;
 }
 
+function sendMessage(channel, msg) {
+    if ((typeof msg === "string" && msg.length > 0) || typeof msg !== "string") {
+        channel.send(msg).catch(console.log);
+    } 
+}
+
 // ---------- COMMANDS ---------- //
 
 function onCommand_ping(msg, client) {
-    msg.channel.send("Up and running!\n" + client.ws.ping + " millisecond delay");
+    sendMessage(msg.channel, "Up and running!\n" + client.ws.ping + " millisecond delay");
 }
 
 function onCommand_help(msg) {
@@ -698,204 +684,207 @@ function onCommand_help(msg) {
         }
     };
     
-    msg.channel.send({
-        content: "KA Monitor Info:",
+    sendMessage(msg.channel, {
+        content: "Vexcess Bot Info:",
         embeds: [helpEmbed]
     });
 }
 
 function onCommand_github(msg) {
-    msg.channel.send("https://github.com/vExcess/ka-monitor");
+    sendMessage(msg.channel, "https://github.com/vExcess/ka-monitor");
 }
 
-function onCommand_update(msg, splitMsg) {
-    if (splitMsg[1] === "programs") {
-        if (msg.author.id !== "480905025112244234") {
-            msg.channel.send("You do not have permission to use that command.");
-        } else {
-            var targetRecurves = 1000;
-            var recurves = 0;
-            if (!programHashes) {
-                programHashes = require('./programsDatabase');
-                if (programHashes && programHashes.KA_PROGRAMHASHES) {
-                    programHashes = programHashes.KA_PROGRAMHASHES;
-                } else {
-                    programHashes = {};
-                }
-            }
-            msg.channel.send("Updating Program Database...");
+// function onCommand_update(msg, splitMsg) {
+//     if (splitMsg[1] === "programs") {
+//         if (msg.author.id !== "480905025112244234") {
+//             sendMessage(msg.channel, "You do not have permission to use that command.");
+//         } else {
+//             var targetRecurves = 1000;
+//             var recurves = 0;
+//             if (!programHashes) {
+//                 programHashes = require('./programsDatabase');
+//                 if (programHashes && programHashes.KA_PROGRAMHASHES) {
+//                     programHashes = programHashes.KA_PROGRAMHASHES;
+//                 } else {
+//                     programHashes = {};
+//                 }
+//             }
+//             sendMessage(msg.channel, "Updating Program Database...");
 
-            var getPrograms = function (programs, page_) {
-                for (let j = 0; j < programs.length; j++) {
-                    getJSON("https://www.khanacademy.org/api/internal/scratchpads/" + programs[j]._id, function (data, program_) {
-                        if (data && data.revision && data.revision.code) {
-                            var splitCode = data.revision.code.split("\n");
-                            var hashedCode = new Set();
-                            for (var k = 0; k < splitCode.length; k += 2) {
-                                hashedCode.add(hashCode(splitCode[k]));
-                            }
-                            programHashes["_" + program_._id] = [data.title, Array.from(hashedCode).join(',')];
+//             var getPrograms = function (programs, page_) {
+//                 for (let j = 0; j < programs.length; j++) {
+//                     getJSON("https://www.khanacademy.org/api/internal/scratchpads/" + programs[j]._id, function (data, program_) {
+//                         if (data && data.revision && data.revision.code) {
+//                             var splitCode = data.revision.code.split("\n");
+//                             var hashedCode = new Set();
+//                             for (var k = 0; k < splitCode.length; k += 2) {
+//                                 hashedCode.add(hashCode(splitCode[k]));
+//                             }
+//                             programHashes["_" + program_._id] = [data.title, Array.from(hashedCode).join(',')];
 
-                            if (program_.idx1 === targetRecurves && program_.idx2 === 49) {
-                                fs.writeFileSync('programsData.js', "exports.KA_PROGRAMHASHES = " + JSON.stringify(programHashes), 'utf-8');
-                                msg.channel.send("Program Database Updated");
-                            }
-                        }
-                    }, {
-                        _id: programs[j]._id,
-                        idx1: page_.idx1,
-                        idx2: j
-                    });
-                }
+//                             if (program_.idx1 === targetRecurves && program_.idx2 === 49) {
+//                                 fs.writeFileSync('programsData.js', "exports.KA_PROGRAMHASHES = " + JSON.stringify(programHashes), 'utf-8');
+//                                 sendMessage(msg.channel, "Program Database Updated");
+//                             }
+//                         }
+//                     }, {
+//                         _id: programs[j]._id,
+//                         idx1: page_.idx1,
+//                         idx2: j
+//                     });
+//                 }
 
-                if (recurves < targetRecurves) {
-                    recurves++;
-                    console.log("page " + recurves);
-                    getJSON("https://willard.fun/programs?&start=" + recurves * 50, function (programs2, page_2) {
-                        getPrograms(programs2, page_2);
-                    }, {
-                        idx1: recurves
-                    });
-                }
-            };
+//                 if (recurves < targetRecurves) {
+//                     recurves++;
+//                     console.log("page " + recurves);
+//                     getJSON("https://willard.fun/programs?&start=" + recurves * 50, function (programs2, page_2) {
+//                         getPrograms(programs2, page_2);
+//                     }, {
+//                         idx1: recurves
+//                     });
+//                 }
+//             };
 
-            getJSON("https://willard.fun/programs?&start=" + i * 50, function (programs, page_) {
-                getPrograms(programs, page_);
-            }, {
-                idx1: recurves
-            });
-        }
-    }
-}
+//             getJSON("https://willard.fun/programs?&start=" + i * 50, function (programs, page_) {
+//                 getPrograms(programs, page_);
+//             }, {
+//                 idx1: recurves
+//             });
+//         }
+//     }
+// }
 
-function onCommand_plagiarism(msg, splitMsg, serverData) {
-    if (serverData.busy) {
-        msg.channel.send("Sorry, the bot is busy at this time");
-    } else {
-        var title = "";
-        var codeHashes = [];
-        var authorId = "";
-        var spinoffs = [];
-        var possibles = [];
-        if (!programHashes) {
-            programHashes = require('./programsDatabase');
-            if (programHashes && programHashes.KA_PROGRAMHASHES) {
-                programHashes = programHashes.KA_PROGRAMHASHES;
-            } else {
-                programHashes = {};
-            }
-        }
+// function onCommand_plagiarism(msg, splitMsg, serverData) {
+//     if (serverData.busy) {
+//         sendMessage(msg.channel, "Sorry, the bot is busy at this time");
+//     } else {
+//         var title = "";
+//         var codeHashes = [];
+//         var authorId = "";
+//         var spinoffs = [];
+//         var possibles = [];
+//         if (!programHashes) {
+//             programHashes = require('./programsDatabase');
+//             if (programHashes && programHashes.KA_PROGRAMHASHES) {
+//                 programHashes = programHashes.KA_PROGRAMHASHES;
+//             } else {
+//                 programHashes = {};
+//             }
+//         }
 
-        serverData.busy = true;
+//         serverData.busy = true;
 
-        // get program
-        getJSON("https://www.khanacademy.org/api/internal/scratchpads/" + splitMsg[1], function (data) {
-            title = data.title;
-            codeHashes = data.revision.code.split("\n").map(line => line.trim()).filter(line => line.length > 4);
-            for (var i = 0; i < codeHashes.length; i++) {
-                codeHashes[i] = hashCode(codeHashes[i]);
-            }
-            msg.channel.send(codeHashes.length + " lines of code to search...");
-            authorId = data.kaid;
+//         // get program
+//         getJSON("https://www.khanacademy.org/api/internal/scratchpads/" + splitMsg[1], function (data) {
+//             title = data.title;
+//             codeHashes = data.revision.code.split("\n").map(line => line.trim()).filter(line => line.length > 4);
+//             for (var i = 0; i < codeHashes.length; i++) {
+//                 codeHashes[i] = hashCode(codeHashes[i]);
+//             }
+//             sendMessage(msg.channel, codeHashes.length + " lines of code to search...");
+//             authorId = data.kaid;
 
-            // get spin-offs
-            getJSON("https://www.khanacademy.org/api/internal/scratchpads/" + splitMsg[1] + "/top-forks?limit=1000", function (data2) {
-                for (var i = 0; i < data2.scratchpads.length; i++) {
-                    spinoffs.push(data2.scratchpads[i].url.split("/")[5]);
-                }
+//             // get spin-offs
+//             getJSON("https://www.khanacademy.org/api/internal/scratchpads/" + splitMsg[1] + "/top-forks?limit=1000", function (data2) {
+//                 for (var i = 0; i < data2.scratchpads.length; i++) {
+//                     spinoffs.push(data2.scratchpads[i].url.split("/")[5]);
+//                 }
 
-                for (var program in programHashes) {
-                    var lineHashes = programHashes[program][1].split(",");
-                    var lineSet = new Set(lineHashes);
-                    var matches = 0;
-                    for (var i = 0; i < codeHashes.length; i++) {
-                        if (lineSet.has(codeHashes[i])) {
-                            matches += 2;
-                        }
-                    }
-                    if (matches > lineHashes.length * 0.15) {
-                        possibles.push([
-                            programHashes[program][0],
-                            program.slice(1, program.length),
-                            matches
-                        ]);
-                    }
-                }
+//                 for (var program in programHashes) {
+//                     var lineHashes = programHashes[program][1].split(",");
+//                     var lineSet = new Set(lineHashes);
+//                     var matches = 0;
+//                     for (var i = 0; i < codeHashes.length; i++) {
+//                         if (lineSet.has(codeHashes[i])) {
+//                             matches += 2;
+//                         }
+//                     }
+//                     if (matches > lineHashes.length * 0.15) {
+//                         possibles.push([
+//                             programHashes[program][0],
+//                             program.slice(1, program.length),
+//                             matches
+//                         ]);
+//                     }
+//                 }
 
-                const exampleEmbed = new Discord.MessageEmbed();
+//                 const exampleEmbed = new Discord.MessageEmbed();
 
-                possibles.sort(function (a, b) {
-                    return b[2] - a[2];
-                });
+//                 possibles.sort(function (a, b) {
+//                     return b[2] - a[2];
+//                 });
 
-                for (var i = 0; i < Math.min(possibles.length, 10); i++) {
-                    exampleEmbed.addField(possibles[i][2] + " lines that match", "[" + possibles[i][0] + "](https://www.khanacademy.org/computer-programming/i/" + possibles[i][1] + ")");
-                }
+//                 for (var i = 0; i < Math.min(possibles.length, 10); i++) {
+//                     exampleEmbed.addField(possibles[i][2] + " lines that match", "[" + possibles[i][0] + "](https://www.khanacademy.org/computer-programming/i/" + possibles[i][1] + ")");
+//                 }
 
-                exampleEmbed.setColor("#1fab55");
-                exampleEmbed.setTitle("**Results for: " + title + "**");
-                exampleEmbed.setURL("https://www.khanacademy.org/computer-programming/i/" + splitMsg[1]);
-                msg.channel.send({
-                    embeds: [exampleEmbed]
-                });
-                serverData.busy = false;
+//                 exampleEmbed.setColor("#1fab55");
+//                 exampleEmbed.setTitle("**Results for: " + title + "**");
+//                 exampleEmbed.setURL("https://www.khanacademy.org/computer-programming/i/" + splitMsg[1]);
+//                 sendMessage(msg.channel, {
+//                     embeds: [exampleEmbed]
+//                 });
+//                 serverData.busy = false;
 
-            });
-        });
-    }
-}
+//             });
+//         });
+//     }
+// }
 
 function onCommand_get(msg, splitMsg, mentionedUser) {
     if (splitMsg[1] === "hot") {
-        var num = parseInt(splitMsg[2], 10);
-        if (typeof num !== "number") {
-            return;
-        }
-        if (num < 1 || num > 10000) {
-            msg.channel.send("Inputted number must be between 1 and 10000 (inclusive)");
-        } else {
-            msg.channel.send("Fetching...");
-            getKAData("https://www.khanacademy.org/api/internal/scratchpads/top?sort=3&limit=" + num, num - 1, num, "lists").then(function (txt) {
-                msg.channel.send(txt);
-            });
-        }
+        // var num = parseInt(splitMsg[2], 10);
+        // if (typeof num !== "number") {
+        //     return;
+        // }
+        // if (num < 1 || num > 10000) {
+        //     sendMessage(msg.channel, "Inputted number must be between 1 and 10000 (inclusive)");
+        // } else {
+        //     sendMessage(msg.channel, "Fetching...");
+        //     getKAData("https://www.khanacademy.org/api/internal/scratchpads/top?sort=3&limit=" + num, num - 1, num, "lists").then(function (txt) {
+        //         sendMessage(msg.channel, txt);
+        //     });
+        // }
+        sendMessage(msg.channel, "This command is temporarily available.");
     }
     
     if (splitMsg[1] === "recent") {
-        var num = parseInt(splitMsg[2], 10);
-        if (typeof num !== "number") {
-            return;
-        }
-        if (num < 1 || num > 10000) {
-            msg.channel.send("Inputted number must be between 1 and 10000 (inclusive)");
-        } else {
-            msg.channel.send("Fetching...");
-            getKAData("https://www.khanacademy.org/api/internal/scratchpads/top?sort=2&limit=" + num, num - 1, num, "lists").then(function (txt) {
-                msg.channel.send(txt);
-            });
-        }
+        // var num = parseInt(splitMsg[2], 10);
+        // if (typeof num !== "number") {
+        //     return;
+        // }
+        // if (num < 1 || num > 10000) {
+        //     sendMessage(msg.channel, "Inputted number must be between 1 and 10000 (inclusive)");
+        // } else {
+        //     sendMessage(msg.channel, "Fetching...");
+        //     getKAData("https://www.khanacademy.org/api/internal/scratchpads/top?sort=2&limit=" + num, num - 1, num, "lists").then(function (txt) {
+        //         sendMessage(msg.channel, txt);
+        //     });
+        // }
+        sendMessage(msg.channel, "This command is temporarily available.");
     }
     
     if (splitMsg[1] === "votes") {
-        var num = parseInt(splitMsg[2], 10);
-        if (typeof num !== "number") {
-            return;
-        }
-        if (num < 1 || num > 10000) {
-            msg.channel.send("Inputted number must be between 1 and 10000 (inclusive)");
-        } else {
-            msg.channel.send("Fetching...");
-            getKAData("https://www.khanacademy.org/api/internal/scratchpads/top?sort=5&limit=" + num + "&topic_id=xffde7c31", num - 1, num, "lists").then(function (txt) {
-                msg.channel.send(txt);
-            });
-        }
+        // var num = parseInt(splitMsg[2], 10);
+        // if (typeof num !== "number") {
+        //     return;
+        // }
+        // if (num < 1 || num > 10000) {
+        //     sendMessage(msg.channel, "Inputted number must be between 1 and 10000 (inclusive)");
+        // } else {
+        //     sendMessage(msg.channel, "Fetching...");
+        //     getKAData("https://www.khanacademy.org/api/internal/scratchpads/top?sort=5&limit=" + num + "&topic_id=xffde7c31", num - 1, num, "lists").then(function (txt) {
+        //         sendMessage(msg.channel, txt);
+        //     });
+        // }
+        sendMessage(msg.channel, "This command is temporarily available.");
     }
     
     if (splitMsg[1] === "profilepic" || splitMsg[1] === "pfp") {
         if (!mentionedUser) {
             mentionedUser = msg.member.user;
         } else if (!mentionedUser.id) {
-            msg.channel.send("Not a valid user.");
+            sendMessage(msg.channel, "Not a valid user.");
             return;
         }
 
@@ -906,12 +895,12 @@ function onCommand_get(msg, splitMsg, mentionedUser) {
         });
 
         if (imgLink) {
-            msg.channel.send({
+            sendMessage(msg.channel, {
                 content: mentionedUser.username + (mentionedUser.username.charAt(mentionedUser.username.length - 1).toLowerCase() === "s" ? "" : "'s") + " Profile Image:",
                 files: [new Discord.MessageAttachment(imgLink)]
             });
         } else {
-            msg.channel.send("Image not found");
+            sendMessage(msg.channel, "Image not found");
         }
 
     }
@@ -920,31 +909,31 @@ function onCommand_get(msg, splitMsg, mentionedUser) {
         if (!mentionedUser) {
             mentionedUser = msg.member;
         } else if (!mentionedUser.id) {
-            msg.channel.send("Not a valid user.");
+            sendMessage(msg.channel, "Not a valid user.");
             return;
         }
 
         if (msg.guild && msg.guild.members && msg.guild.members.cache && msg.guild.members.cache.get) {
             var memberTarget = msg.guild.members.cache.get(mentionedUser.id);
             if (memberTarget && memberTarget.user) {
-                msg.channel.send(memberTarget.user.id);
+                sendMessage(msg.channel, memberTarget.user.id);
             }
         }
     }
     
     if (splitMsg[1] === "guildid") {
-        msg.channel.send(msg.guild.id);
+        sendMessage(msg.channel, msg.guild.id);
     }
     
     if (splitMsg[1] === "channelid") {
-        msg.channel.send(msg.channel.id);
+        sendMessage(msg.channel, msg.channel.id);
     }
     
     if (splitMsg[1] === "roles") {
         if (!mentionedUser) {
             mentionedUser = msg.member;
         } else if (!mentionedUser.id) {
-            msg.channel.send("Not a valid user.");
+            sendMessage(msg.channel, "Not a valid user.");
             return;
         }
 
@@ -957,7 +946,7 @@ function onCommand_get(msg, splitMsg, mentionedUser) {
             }
         });
 
-        msg.channel.send(output);
+        sendMessage(msg.channel, output);
     }
     
     if (splitMsg[1] === "KAuser") {
@@ -976,17 +965,17 @@ function onCommand_get(msg, splitMsg, mentionedUser) {
             variablesObj.username = splitMsg[2];
         }
 
-        msg.channel.send("Searching...");
+        sendMessage(msg.channel, "Searching...");
         
         // get main profile data
-        KA_fetch.graphQL({
-                operationName: "getFullUserProfile",
+        KA_API.graphQL({
+                operation: "getFullUserProfile",
                 variables: variablesObj
             },
             function (data) {
                 // notify if user is not found
                 if (!data.user) {
-                    msg.channel.send("User not found");
+                    sendMessage(msg.channel, "User not found.");
                     return;
                 }
 
@@ -1012,8 +1001,8 @@ function onCommand_get(msg, splitMsg, mentionedUser) {
                     "\nEnergy Points:  " + numberWithCommas(data.user.points);
 
                 // get avatar data
-                KA_fetch.graphQL({
-                        operationName: "avatarDataForProfile",
+                KA_API.graphQL({
+                        operation: "avatarDataForProfile",
                         variables: {
                             kaid: data.user.kaid
                         },
@@ -1023,9 +1012,9 @@ function onCommand_get(msg, splitMsg, mentionedUser) {
                         kaUserEmbed.setThumbnail(data2.user.avatar.imageSrc.replace("svg/", "").replace(".svg", ".png"));
 
                         // get badges and discussion data
-                        KA_fetch.graphQL(
+                        KA_API.graphQL(
                             {
-                                operationName: "getProfileWidgets",
+                                operation: "getProfileWidgets",
                                 variables: {
                                     kaid: data.user.kaid
                                 },
@@ -1069,31 +1058,36 @@ function onCommand_get(msg, splitMsg, mentionedUser) {
                                 }
                                 
                                 // get program
-                                getJSON("https://www.khanacademy.org/api/internal/user/scratchpads?kaid=" + data.user.kaid + "&limit=10000", function (data4) {
-                                    var totalPrograms = data4.scratchpads.length;
-                                    var totalVotes = 0;
-                                    var totalForks = 0;
-                                    for (var i = 0; i < totalPrograms; i++) {
-                                        var program = data4.scratchpads[i];
+                                // getJSON("https://www.khanacademy.org/api/internal/user/scratchpads?kaid=" + data.user.kaid + "&limit=10000", function (data4) {
+                                //     var totalPrograms = data4.scratchpads.length;
+                                //     var totalVotes = 0;
+                                //     var totalForks = 0;
+                                //     for (var i = 0; i < totalPrograms; i++) {
+                                //         var program = data4.scratchpads[i];
 
-                                        totalVotes += program.sumVotesIncremented;
-                                        totalForks += program.spinoffCount;
-                                    }
+                                //         totalVotes += program.sumVotesIncremented;
+                                //         totalForks += program.spinoffCount;
+                                //     }
+
+                                    var totalPrograms = "404 Not found";
+                                    var totalVotes = "404 Not found";
+                                    var totalForks = "404 Not found";
 
                                     // add programs data
                                     contentString += "\n\n**PROGRAM INFO**" + 
                                         "\nProgram Count:  " + totalPrograms + 
                                         "\nVotes Recieved:  " + totalVotes + 
                                         "\nSpinoffs Recieved:  " + totalForks + 
-                                        "\nAverage Votes Recieved:  " + Math.round(totalVotes / totalPrograms) + 
-                                        "\nAverage Spinoffs Recieved:  " + Math.round(totalForks / totalPrograms);
+                                        ""
+                                        // "\nAverage Votes Recieved:  " + Math.round(totalVotes / totalPrograms) + 
+                                        // "\nAverage Spinoffs Recieved:  " + Math.round(totalForks / totalPrograms);
                                     
                                     // set description and send embed
                                     kaUserEmbed.setDescription(contentString);
-                                    msg.channel.send({
+                                    sendMessage(msg.channel, {
                                         embeds: [kaUserEmbed]
                                     });
-                                });
+                                // });
                             }
                         );
                     }
@@ -1106,22 +1100,21 @@ function onCommand_get(msg, splitMsg, mentionedUser) {
         if (!mentionedUser) {
             mentionedUser = msg.member;
         } else if (!mentionedUser.id) {
-            msg.channel.send("Not a valid user.");
+            sendMessage(msg.channel, "Not a valid user.");
             return;
         }
         
         if (!membersDatabase[mentionedUser.id]) {
-            msg.channel.send("No data for that user.");
+            sendMessage(msg.channel, "No data for that user.");
         } else {
             var member = membersDatabase[mentionedUser.id];
 
-            msg.channel.send("```\n" + 
-                member.tag + 
-                "\nTotal Messages Sent: " + member.messagesSent + 
-                "\nBad Words Sent: " + member.badWordUses + 
-                "\nSusness Score: " + Math.round(member.susnessCount / member.messagesSent * 1000) + 
-                "\n```"
-            );
+            sendMessage(msg.channel, "```\n" + 
+            member.tag + 
+            "\nTotal Messages Sent: " + member.messagesSent + 
+            "\nBad Words Sent: " + member.badWordUses + 
+            "\nSusness Score: " + Math.round(member.susnessCount / member.messagesSent * 1000) + 
+            "\n```");
         }
     }
 
@@ -1129,12 +1122,12 @@ function onCommand_get(msg, splitMsg, mentionedUser) {
         if (!mentionedUser) {
             mentionedUser = msg.member;
         } else if (!mentionedUser.id) {
-            msg.channel.send("Not a valid user.");
+            sendMessage(msg.channel, "Not a valid user.");
             return;
         }
         
         if (!membersDatabase[mentionedUser.id]) {
-            msg.channel.send("No data for that user.");
+            sendMessage(msg.channel, "No data for that user.");
         } else {
             var member = membersDatabase[mentionedUser.id];
             var lastMessageTime = member.lastMessageTime;
@@ -1215,7 +1208,7 @@ function onCommand_get(msg, splitMsg, mentionedUser) {
               	timeZoneName: 'long'
             });
 
-            msg.channel.send({
+            sendMessage(msg.channel, {
                 content: "```\n" + 
                 member.tag +
                 "\nLast Activity was on: " + d +
@@ -1232,7 +1225,7 @@ function onCommand_search(msg, splitMsg) {
     if (splitMsg[1] === "user") {
         var results = searchUsers(splitMsg[2]);
 
-        msg.channel.send("Searching...");
+        sendMessage(msg.channel, "Searching...");
 
         const exampleEmbed = new Discord.MessageEmbed();
 
@@ -1244,14 +1237,14 @@ function onCommand_search(msg, splitMsg) {
         exampleEmbed.setTitle("**Search Results (" + results.length + "):**");
         exampleEmbed.setURL("https://www.khanacademy.org/computer-programming/i/4733975100702720");
 
-        msg.channel.send({
+        sendMessage(msg.channel, {
             embeds: [exampleEmbed]
         });
     }
     if (splitMsg[1] === "google" || splitMsg[1] === "bing" || splitMsg[1] === "duckduckgo" || splitMsg[1] === "yahoo") {
         var query = msg.content.slice(15, msg.content.length);
 
-        msg.channel.send("Searching...");
+        sendMessage(msg.channel, "Searching...");
 
         fetch("https://www.google.com/search?q=" + query)
             .then(res => res.text())
@@ -1325,22 +1318,19 @@ function onCommand_search(msg, splitMsg) {
                 exampleEmbed.setColor("#1fab55");
                 exampleEmbed.setTitle("**Results for: " + query + "**");
 
-                msg.channel.send({
+                sendMessage(msg.channel, {
                     embeds: [exampleEmbed]
                 });
-
             })
     }
     if (splitMsg[1] === "images") {
         var query = msg.content.slice(15, msg.content.length);
 
-        msg.channel.send("Searching...");
+        sendMessage(msg.channel, "Searching...");
         
         fetch("https://www.google.com/search?q=" + query + "&tbm=isch")
             .then(res => res.text())
             .then(function (text) {
-                fs.writeFile("google.txt", text, ()=>{});
-
                 var links = [];
                 
                 const dom = new JSDOM(text);
@@ -1351,17 +1341,17 @@ function onCommand_search(msg, splitMsg) {
                     links.push(new Discord.MessageEmbed().setImage(results[i].src));
                 }
 
-                msg.channel.send({
+                sendMessage(msg.channel, {
                     content: "Results:",
                     embeds: links,
-                }).catch(console.log);
+                });
             })
     }
 }
 
 function onCommand_coolify(msg, splitMsg, p) {
     if (!splitMsg[1]) {
-        msg.channel.send("No input");
+        sendMessage(msg.channel, "No input");
     }
     var newData = "";
     var str = msg.content.substring(splitMsg[0].length + splitMsg[1].length + 1, msg.content.length);
@@ -1381,7 +1371,7 @@ function onCommand_coolify(msg, splitMsg, p) {
         newData = coolifyText(str, coolFont_cursive);
     }
     if (newData.length > 0) {
-        msg.channel.send(newData).catch(console.log);
+        sendMessage(msg.channel, newData);
     }
 }
 
@@ -1400,7 +1390,7 @@ function onCommand_wyr(msg) {
                     options[4].split('</div>')[0].split('rel="nofollow">')[1].split('</a>')[0].replace("\n", "")
                 ];
 
-                msg.channel.send("**" + preface + "**\n\n**EITHER...**\n:regional_indicator_a: " + options[0] + "\n\n**OR...**\n:regional_indicator_b: " + options[1])
+                sendMessage(msg.channel, "**" + preface + "**\n\n**EITHER...**\n:regional_indicator_a: " + options[0] + "\n\n**OR...**\n:regional_indicator_b: " + options[1])
                     .then(function (msg) {
                         msg.react("🇦")
                             .then(function () {
@@ -1409,7 +1399,7 @@ function onCommand_wyr(msg) {
                     });
 
             } else {
-                msg.channel.send("An Error Has Occured. Please Try Again In A Few Seconds.");
+                sendMessage(msg.channel, "An Error Has Occured. Please Try Again In A Few Seconds.");
             }
         });
 }
@@ -1447,7 +1437,7 @@ function onCommand_define(msg, lowMsg) {
 
                 if (entries.length === 0) {
                     entries = dict.getElementsByClassName("one-click-content css-0 e1w1pzze4");
-                    msg.channel.send({
+                    sendMessage(msg.channel, {
                         embeds: [{
                             color: 3447003,
                             description: ("**" + word + "**\n\n" + entries[0].textContent).slice(0, 2000)
@@ -1479,7 +1469,7 @@ function onCommand_define(msg, lowMsg) {
                     definitionOutput += "\n";
                 }
 
-                msg.channel.send({
+                sendMessage(msg.channel, {
                     embeds: [{
                         color: 3447003,
                         description: ("**" + word + "**\n\n" + definitionOutput).slice(0, 2000)
@@ -1487,7 +1477,7 @@ function onCommand_define(msg, lowMsg) {
                 })
 
             } else {
-                msg.channel.send("No results found for: " + inputWord);
+                sendMessage(msg.channel, "No results found for: " + inputWord);
             }
 
         });
@@ -1495,20 +1485,20 @@ function onCommand_define(msg, lowMsg) {
 
 function onCommand_swearFilter(msg, splitMsg, lowMsg, serverData) {
     if (!authorIsStaff(msg)) {
-        msg.channel.send("You do not have permission to use that command.");
+        sendMessage(msg.channel, "You do not have permission to use that command.");
         return;
     }
 
     if (splitMsg[1] === "on" || splitMsg[1] === "true" || splitMsg[1] === "yes") {
         serverData.swearFilterOn = true;
-        msg.channel.send("The swear filter has been turned on in " + msg.guild.name);
-        fs.writeFileSync('serversData.js', "exports.SERVER_DATA = " + JSON.stringify(serversDatabase, null, "  "), 'utf-8');
+        sendMessage(msg.channel, "The swear filter has been turned on in " + msg.guild.name);
+        fs.writeFileSync('./serversData.js', "exports.SERVER_DATA = " + JSON.stringify(serversDatabase, null, "  "), 'utf-8');
     } else if (splitMsg[1] === "off" || splitMsg[1] === "false" || splitMsg[1] === "no") {
         serverData.swearFilterOn = false;
-        msg.channel.send("The swear filter has been turned off in " + msg.guild.name);
-        fs.writeFileSync('serversData.js', "exports.SERVER_DATA = " + JSON.stringify(serversDatabase, null, "  "), 'utf-8');
+        sendMessage(msg.channel, "The swear filter has been turned off in " + msg.guild.name);
+        fs.writeFileSync('./serversData.js', "exports.SERVER_DATA = " + JSON.stringify(serversDatabase, null, "  "), 'utf-8');
     } else if (splitMsg[1] === "test") {
-        msg.channel.send({
+        sendMessage(msg.channel, {
             embeds: [{
                 color: 3447003,
                 description: "what the **hell**"
@@ -1516,41 +1506,41 @@ function onCommand_swearFilter(msg, splitMsg, lowMsg, serverData) {
         });
     } else if (splitMsg[1] === "reset") {
         serverData.bannedWords = defaultBannedWords.slice(0, defaultBannedWords.length);
-        msg.channel.send("The swear filter has been reset in " + msg.guild.name);
-        fs.writeFileSync('serversData.js', "exports.SERVER_DATA = " + JSON.stringify(serversDatabase, null, "  "), 'utf-8');
+        sendMessage(msg.channel, "The swear filter has been reset in " + msg.guild.name);
+        fs.writeFileSync('./serversData.js', "exports.SERVER_DATA = " + JSON.stringify(serversDatabase, null, "  "), 'utf-8');
     } else if (splitMsg[1] === "add") {
         var wrd = lowMsg.slice(lowMsg.indexOf(splitMsg[1]) + splitMsg[1].length + 1, lowMsg.length);
         var wordIdx = serverData.bannedWords.indexOf(wrd);
         if (wordIdx < 0) {
             serverData.bannedWords.push(wrd);
-            msg.channel.send("The word `" + wrd + "` has been added to the filter.");
-            fs.writeFileSync('serversData.js', "exports.SERVER_DATA = " + JSON.stringify(serversDatabase, null, "  "), 'utf-8');
+            sendMessage(msg.channel, "The word `" + wrd + "` has been added to the filter.");
+            fs.writeFileSync('./serversData.js', "exports.SERVER_DATA = " + JSON.stringify(serversDatabase, null, "  "), 'utf-8');
         } else {
-            msg.channel.send("The word `" + wrd + "` is already on the filter.");
+            sendMessage(msg.channel, "The word `" + wrd + "` is already on the filter.");
         }
     } else if (splitMsg[1] === "remove") {
         var wrd = lowMsg.slice(lowMsg.indexOf(splitMsg[1]) + splitMsg[1].length + 1, lowMsg.length);
         var wordIdx = serverData.bannedWords.indexOf(wrd);
         if (wordIdx >= 0) {
             serverData.bannedWords.splice(wordIdx, 1);
-            msg.channel.send("The word `" + wrd + "` has been removed from the filter.");
-            fs.writeFileSync('serversData.js', "exports.SERVER_DATA = " + JSON.stringify(serversDatabase, null, "  "), 'utf-8');
+            sendMessage(msg.channel, "The word `" + wrd + "` has been removed from the filter.");
+            fs.writeFileSync('./serversData.js', "exports.SERVER_DATA = " + JSON.stringify(serversDatabase, null, "  "), 'utf-8');
         } else {
-            msg.channel.send("The word `" + wrd + "` is not on the filter.");
+            sendMessage(msg.channel, "The word `" + wrd + "` is not on the filter.");
         }
     }
 }
 
 function onCommand_set(msg, splitMsg, serverData) {
     if (!authorIsStaff(msg)) {
-        msg.channel.send("You do not have permission to use that command.");
+        sendMessage(msg.channel, "You do not have permission to use that command.");
         return;
     }
 
     if (splitMsg[1] === "prefix") {
         serverData.prefix = splitMsg[2];
-        msg.channel.send("My prefix has been set to `" + serverData.prefix + "`");
-        fs.writeFileSync('serversData.js', "exports.SERVER_DATA = " + JSON.stringify(serversDatabase, null, "  "), 'utf-8');
+        sendMessage(msg.channel, "My prefix has been set to `" + serverData.prefix + "`");
+        fs.writeFileSync('./serversData.js', "exports.SERVER_DATA = " + JSON.stringify(serversDatabase, null, "  "), 'utf-8');
     }
 
     if (splitMsg[1] === "logs") {
@@ -1558,13 +1548,13 @@ function onCommand_set(msg, splitMsg, serverData) {
 
         if (c) {
             serverData.logChannel = splitMsg[2];
-            msg.channel.send("Logging to <#" + serverData.logChannel + ">");
+            sendMessage(msg.channel, "Logging to <#" + serverData.logChannel + ">");
         } else {
             serverData.logChannel = "";
-            msg.channel.send("Channel not found");
+            sendMessage(msg.channel, "Channel not found");
         }
 
-        fs.writeFileSync('serversData.js', "exports.SERVER_DATA = " + JSON.stringify(serversDatabase, null, "  "), 'utf-8');
+        fs.writeFileSync('./serversData.js', "exports.SERVER_DATA = " + JSON.stringify(serversDatabase, null, "  "), 'utf-8');
     }
 }
 
@@ -1590,7 +1580,7 @@ function onCommand_leaderboard (msg, splitMsg) {
             content += (i + 1) + ") " + member[0] + " --- " + member[1] + " messages sent\n";
         }
 
-        msg.channel.send(content + "```");
+        sendMessage(msg.channel, content + "```");
     }
 
     if (splitMsg[1] === "pottymouth") {
@@ -1614,7 +1604,7 @@ function onCommand_leaderboard (msg, splitMsg) {
             content += (i + 1) + ") " + member[0] + " --- " + member[1] + " bad words sent\n";
         }
 
-        msg.channel.send(content + "```");
+        sendMessage(msg.channel, content + "```");
     }
 
     if (splitMsg[1] === "sus") {
@@ -1638,7 +1628,7 @@ function onCommand_leaderboard (msg, splitMsg) {
             content += (i + 1) + ") " + member[0] + " --- " + member[1] + " susness points\n";
         }
 
-        msg.channel.send(content + "```");
+        sendMessage(msg.channel, content + "```");
     }
 
 }
@@ -1657,7 +1647,7 @@ function onCommand_translate (msg) {
     var firstQuoteIdx = msgContent.indexOf('"') + 1;
     
     if (firstQuoteIdx === 0 || lastQuoteIdx === 0) {
-        msg.channel.send("Quote to translate not found. Remember to put what you want to translate into quotes.");
+        sendMessage(msg.channel, "Quote to translate not found. Remember to put what you want to translate into quotes.");
     }
     
     var transMsg = msgContent.slice(firstQuoteIdx, lastQuoteIdx);
@@ -1690,7 +1680,7 @@ function onCommand_translate (msg) {
     }
 
     if (knowsLanguage === 0) {
-        msg.channel.send("That language is not known.");
+        sendMessage(msg.channel, "That language is not known.");
         return;
     }
     
@@ -1705,7 +1695,7 @@ function onCommand_translate (msg) {
         data = data.slice(data.indexOf('\\"') + 2, data.length);
         data = data.slice(data.indexOf('\\"') + 2, data.length);
         data = data.slice(0, data.indexOf('\\"'));
-        msg.channel.send(data);
+        sendMessage(msg.channel, data);
     })
 }
 
@@ -1728,7 +1718,7 @@ function onCommand_eval (msg) {
     try {
         // check that code exists
         if (code.length === 0) {
-            msg.channel.send("Code block not found");
+            sendMessage(msg.channel, "Code block not found");
             return;
         }
 
@@ -1772,13 +1762,13 @@ function onCommand_eval (msg) {
             if (Date.now() - runStartTime > 3000) {
                 error = true;
                 running = false;
-                msg.channel.send("oh no! Program taking too long to run");
+                sendMessage(msg.channel, "oh no! Program taking too long to run");
             }
         }
     } catch (err) {
         error = true;
         running = false;
-        msg.channel.send("**An Error Has Occured:**\n```diff\n- " + err.toString().slice(0, 1950) + "\n```");
+        sendMessage(msg.channel, "**An Error Has Occured:**\n```diff\n- " + err.toString().slice(0, 1950) + "\n```");
     }
 
     console.log("-----------------------------")
@@ -1794,7 +1784,7 @@ function onCommand_eval (msg) {
         resultEmbed.setColor("#1fab55");
         resultEmbed.addField("**Program Output:**", logTxt);
         
-        msg.channel.send({
+        sendMessage(msg.channel, {
             embeds: [resultEmbed]
         });
     }    
@@ -1819,7 +1809,7 @@ function onCommand_dangerEval (msg) {
     
         // check that code exists
         if (code.length === 0) {
-            msg.channel.send("Code block not found");
+            sendMessage(msg.channel, "Code block not found");
             return;
         }
     
@@ -1838,14 +1828,14 @@ var println = function (txt) {
 var done = function () {
     resultEmbed.setColor("#1fab55");
     resultEmbed.addField("**Program Output:**", ">>> " + evalResults.slice(0, 1950));
-    msg.channel.send({ embeds: [resultEmbed] });
+    sendMessage(msg.channel, { embeds: [resultEmbed] });
 };
 
 try {
     ${code}
 } catch (err) {
     console.log(err);
-    msg.channel.send("**An Error Has Occured:**\\n\`\`\`diff\\n- " + err.toString().slice(0, 1950) + "\\n\`\`\`");
+    sendMessage(msg.channel, "**An Error Has Occured:**\\n\`\`\`diff\\n- " + err.toString().slice(0, 1950) + "\\n\`\`\`");
 }
             `;
 
@@ -1856,17 +1846,17 @@ try {
             
         } catch (err) {
             console.log(err);
-            msg.channel.send("**An Error Has Occured:**\n```diff\n- " + err.toString().slice(0, 1950) + "\n```");
+            sendMessage(msg.channel, "**An Error Has Occured:**\n```diff\n- " + err.toString().slice(0, 1950) + "\n```");
         }
         
     } else {
-        msg.channel.send("You don't have permission to use danger eval");
+        sendMessage(msg.channel, "You don't have permission to use danger eval");
     }
 }
 
 function onCommand_delete (msg, splitMsg) {
     if (!authorIsStaff(msg)) {
-        msg.channel.send("You do not have permission to use that command.");
+        sendMessage(msg.channel, "You do not have permission to use that command.");
         return;
     }
 
@@ -1882,7 +1872,7 @@ function onCommand_spam (msg) {
         content = content.slice(2, content.length).join(" ");
         for (var i = 0; i < amt; i++) {
             setTimeout(function () {
-                msg.channel.send(content);
+                sendMessage(msg.channel, content);
             }, Math.random() * amt * 1000);
         }
     }
@@ -1912,14 +1902,70 @@ function onCommand_tictactoe (msg, mentionedUser) {
         rows.push(actionRow);
     }
 
-    msg.channel.send({
+    sendMessage(msg.channel, {
         content: `**Tic Tac Toe** | ${msg.author.tag} vs AI | ${msg.author.tag}'s turn`,
         components: rows
     });
 }
 
-function onCommand_say (msg) {
-    msg.channel.send(msg.content.slice(msg.content.indexOf(" ") + 1).replaceAll("@", "\\@"));
+function onCommand_say (msg, p) {
+    sendMessage(msg.channel, msg.content.slice(msg.content.indexOf(" ") + 1).replaceAll("@", "\\@").replaceAll(p+"say", ""));
+}
+
+const io = require("socket.io-client");
+let GPT2Tunnel = null;
+let GPT2Connected = false;
+let GPT2Channel = null;
+let answer = null;
+
+
+function onCommand_gpt (msg, p) {
+    // connect
+    if (GPT2Tunnel === null) {
+        GPT2Tunnel = io("https://GPT2.vexcess.repl.co");
+        GPT2Tunnel.on('connect', function () {
+            console.log("Tunnel Connected");
+            GPT2Connected = true;
+        
+            GPT2Tunnel.on("answer", e => {
+                console.log(e)
+                if (GPT2Channel) {
+                    answer = e.data;
+                    GPT2Channel.send(answer);
+                }
+            })
+        });
+        GPT2Tunnel.on('disconnect', function () {
+            GPT2Connected = false;
+        });
+        
+        GPT2Tunnel.on("connect_error", (err) => {
+            console.log(`connect_error due to ${err.message}`);
+        });
+    }
+
+    // handle
+    GPT2Channel = msg.channel;
+    answer = null;
+
+    if (!GPT2Connected) {
+        sendMessage(msg.channel, "GPT2 is not available at the moment. Contact @vExcess#1616 so that he can restart the AI.");
+    } else {
+        let content = msg.content.slice(p.length + 3);
+
+        GPT2Tunnel.emit("request", {
+            name: msg.author.username,
+            prompt: content
+        });
+    
+        function check () {
+            if (answer === null) {
+                GPT2Channel.sendTyping();
+                setTimeout(check, 10000);
+            }
+        }
+        check();
+    }
 }
 
 // ---------- ON MESSAGE ---------- //
@@ -1967,7 +2013,12 @@ client.on("messageCreate", function (msg) {
             return;
         }
 
+        // chat logs for "debugging purposes"
         console.log(msg.author.tag + " - " + JSON.stringify(msg.content));
+        for (let a of msg.attachments) {
+            console.log("attachment: " + a[1].url);
+        }
+        console.log("");
 
         // get message tokens
         var splitMsg = lowMsg.split(" ");
@@ -2037,18 +2088,13 @@ client.on("messageCreate", function (msg) {
         if (msg.content.trim() === "<@845426453322530886>" && mentionedUser) {
             var memberTarget = msg.guild.members.cache.get(mentionedUser.id);
             if (memberTarget && memberTarget.user.id === "845426453322530886") {
-                msg.channel.send("My prefix is `" + serverData.prefix + "`");
+                sendMessage(msg.channel, "My prefix is `" + serverData.prefix + "`");
             }
         }
 
         // check if has prefix
         if (lowMsg.indexOf(p) !== 0) {
             return;
-        }
-
-        // keep alive
-        if (Math.random() < 0.01) {
-            msg.channel.send("https://KA-Monitor-20.vexcess.repl.co/" + Math.random().toString().replace(".", "") + ".png");
         }
 
         // commands
@@ -2130,8 +2176,12 @@ client.on("messageCreate", function (msg) {
                 break;
                 
             case "say":
-                onCommand_say(msg);
+                onCommand_say(msg, p);
                 break;
+
+            case "gpt":
+                    onCommand_gpt(msg, p);
+                    break;
         }
     } catch (err) {
         console.log(err);
@@ -2385,6 +2435,21 @@ client.on("ready", function () {
     console.log(`Logged in as ${client.user.tag}!`);
 });
 
+client.once('ready',()=>{
+  console.log("Online!");
+});
+
+client.on('shardDisconnect', function (evt, id) {
+	console.log('Lost connection: ' + evt + ' (' + id + ')');
+});
+
+client.on('shardError', function (error, shardid) {
+	console.log('Connection Error: ' + error + ' (' + shardid + ')');
+});
+
+client.on('shardReady', function (error, unavail) {
+	console.log('Connection Ready: ' + error + ' (' + unavail + ')');
+});
 
 // ---------- ON DEBUG ---------- //
 client.on('debug', function (e) {
@@ -2399,28 +2464,29 @@ client.on('debug', function (e) {
 });
 
 // init
-var loginInterval;
-function attemptLogin () {
-    console.log("Requested to login");
+// var loginInterval;
+// function attemptLogin () {
+//     console.log("Requested to login");
     
-    var lastLoginAttempt = Number(fs.readFileSync("loginTime.txt", "utf8"));
+//     var lastLoginAttempt = Number(fs.readFileSync("./loginTime.txt", "utf8"));
     
-    if (debugging || Date.now() - lastLoginAttempt > 1000 * 60 * 5) {
-        lastLoginAttempt = Date.now();
-        fs.writeFile("loginTime.txt", lastLoginAttempt.toString(), ()=>{});
-        console.log("Attempting to log in...");
-        client.login(process.env['myToken']);
-        clearInterval(loginInterval);
-    } else {
-        console.log("Waiting to login...");
-    }
-}
-loginInterval = setInterval(attemptLogin, 1000);
+//     if (debugging || Date.now() - lastLoginAttempt > 1000 * 60 * 5) {
+//         lastLoginAttempt = Date.now();
+//         fs.writeFile("./loginTime.txt", lastLoginAttempt.toString(), ()=>{});
+//         console.log("Attempting to log in...");
+//         client.login(process.env['myToken']);
+//         clearInterval(loginInterval);
+//     } else {
+//         console.log("Waiting to login...");
+//     }
+// }
+// loginInterval = setInterval(attemptLogin, 1000);
+client.login(process.env['myToken']);
 
-// update members database every three minutes
+// update members database every 5 minutes
 setInterval(function () {
-    fs.writeFile("membersData.json", JSON.stringify(membersDatabase, null, "  "), ()=>{});
-}, 1000 * 60 * 3);
+    fs.writeFile("./membersData.json", JSON.stringify(membersDatabase, null, "  "), ()=>{});
+}, 1000 * 60 * 5);
 
 
 // log time every 5 minutes
@@ -2428,18 +2494,3 @@ setInterval(function () {
     var d = new Date().toLocaleTimeString();
     console.log(d);
 }, 1000 * 60 * 5);
-
-function keepAlive(){
-    if (client && client.channels && client.channels.cache && client.channels.cache.get) {
-        let pingChannel = client.channels.cache.get("810540153294684195");
-        let pingContent = "https://ka-monitor-20.vexcess.repl.co/" + Math.random().toString().replace(".", "") + ".png";
-        if (pingChannel && pingChannel.send) {
-            pingChannel.send(pingContent);
-        }        
-    }
-}
-
-// ping Discord every 25 minutes
-setInterval(function () {
-    // keepAlive();
-}, 1000 * 60 * 28);
