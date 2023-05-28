@@ -1,37 +1,46 @@
-const express = require('express');
-const server = express();
+const http = require("http");
+const fs = require("fs");
 
-server.all('/', (req, res)=>{
-  res.setHeader('Content-Type', 'text/html');
+const server = http.createServer((req, res) => {
+    res.setHeader("Access-Control-Allow-Origin", "*");
 
-  res.write(`
-<head>
-  <style>
-    body {
-      font-family: sans-serif;
+    if (req.url === "/") {
+        res.writeHead(200, {"Content-Type": "text/html"});
+        
+        res.write(`
+            <head>
+                <style>
+                    body {
+                      font-family: sans-serif;
+                    }
+                    #thing {
+                      margin: auto;
+                      width: 80%;
+                      padding: 10px;
+                      text-align: center;
+                    }
+                </style> 
+            </head>
+            <body>
+                <div id="thing">
+                    <h2>Hosting Active</h2>
+                </div>
+            </body>
+        `); 
+    } else {
+        res.writeHead(200, {"Content-Type": "image/png"});
+
+        res.write(fs.readFileSync("./pingPixel.png"));
     }
-    #thing {
-      margin: auto;
-      width: 80%;
-      padding: 10px;
-      text-align: center;
-    }
-  </style> 
-</head>
-<body>
-  <div id="thing">
-    <h2>Hosting Active</h2>
-  </div>
-</body>
-  `);
 
-  res.end();
-})
+    res.end();
+});
 
-function keepAlive(){
-  server.listen(3000, function(){
+// connect server to internet
+server.listen(3000, _ => {
     console.log("Server is online!");
-  });
-}
+});
 
-module.exports = keepAlive;
+module.exports = {
+    server: server
+};
