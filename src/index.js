@@ -10,8 +10,6 @@ const jsdom = require("jsdom");
 const babel = require("@babel/core");
 const { JSDOM } = jsdom;
 const fs = require('fs');
-const KA_API = require('./KA_API');
-KA_API.nodeFetch = fetch;
 global.acorn = require('./acorn/acorn');
 const JSInterpreter = require('./acorn/interpreter');
 const Processing = require("./ProcessingVC");
@@ -25,10 +23,6 @@ const client = new Discord.Client({
     intents: ["GUILDS", "GUILD_MESSAGES", "DIRECT_MESSAGES"],
     partials: ["CHANNEL"]
 });
-
-
-var users = false;
-var nicks = false;
 
 var membersDatabase = fs.readFileSync("./membersData.json", "utf8");
 if (membersDatabase.length === 0) {
@@ -70,64 +64,6 @@ var base92 = {
     }
 };
 
-function hashCode(str) {
-    var h = 0;
-    var stop = Math.min(str.length, 125);
-    for (var i = 0; i < stop; i++) {
-        h += i * str.charCodeAt(i);
-    }
-    return base92.encode(h);
-}
-
-function searchUsers(input) {
-    input = input.toLowerCase();
-    var tokens = input.split(" ");
-    if (!users) {
-        users = require('./KAUsersDatabase');
-        nicks = users.KA_USERS[0];
-    }
-
-    var results = [];
-    var numResults = 0;
-
-    var startTimer = Date.now();
-
-    if (input.length > 0) {
-        for (var i = 0; i < nicks.length; i++) {
-            if (numResults < 5000) {
-                for (var j = 0; j < tokens.length; j++) {
-                    if (nicks[i].toLowerCase().includes(tokens[j])) {
-                        var nick = nicks[i];
-                        var kaid = users.KA_USERS[1][i];
-
-                        var included = false;
-                        for (var k = 0; k < results.length; k++) {
-                            if (results[k][1] === kaid) {
-                                included = true;
-                                results[k][2]++;
-                                break;
-                            }
-                        }
-
-                        if (!included) {
-                            results.push([nick, kaid, 1]);
-                        }
-
-                        numResults++;
-                    }
-                }
-            } else {
-                break;
-            }
-        }
-    }
-
-    results.sort(function (a, b) {
-        return b[2] - a[2];
-    });
-
-    return results;
-}
 
 const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 const weekdays = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
@@ -203,73 +139,6 @@ function getJSON(url, callback, extras) {
         }).catch(function (error) {
             console.log(error);
         })
-}
-
-function getKAData(url, start, stop, type) {
-    return fetch(url)
-        .then(res => {
-            return res.json();
-        })
-        .then(data => {
-            if (type === "lists") {
-                var newData = "";
-                var img = "";
-                if (!start) {
-                    start = 0;
-                }
-                if (!stop) {
-                    stop = data.scratchpads.length;
-                }
-                for (var i = start; i < stop; i++) {
-                    var project = data.scratchpads[i];
-                    newData += project.title + "\n";
-                    newData += project.authorNickname + "\n";
-                    newData += project.authorKaid + "\n";
-                    newData += project.sumVotesIncremented + "\n";
-                    newData += project.url + "\n";
-                }
-                return newData;
-            } else if (type === "user") {
-                var newData = {
-                    nickname: "",
-                    username: "",
-                    bio: "",
-                    kaid: "",
-                    countVideosCompleted: "",
-                    points: "",
-                    dateJoined: "",
-                    image: "",
-                };
-                if (data.nickname) {
-                    newData.nickname = data.nickname;
-                }
-                if (data.username) {
-                    newData.username = data.username;
-                }
-                if (data.bio) {
-                    newData.bio = data.bio;
-                }
-                if (data.kaid) {
-                    newData.kaid = data.kaid;
-                }
-                if (data.countVideosCompleted) {
-                    newData.countVideosCompleted = numberWithCommas(data.countVideosCompleted);
-                }
-                if (data.points) {
-                    newData.points = numberWithCommas(data.points);
-                }
-                if (data.dateJoined) {
-                    var dataJoined = data.dateJoined.slice(0, 10).split("-");
-                    newData.dateJoined = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"][parseInt(dataJoined[1], 10) - 1] + " " + dataJoined[2] + "th " + dataJoined[0] + " (" + (new Date().getFullYear() - parseInt(dataJoined[0])) + " years ago)";
-                }
-                if (data.avatar.imageSrc) {
-                    newData.image = data.avatar.imageSrc.replace("svg/", "").replace(".svg", ".png");
-                }
-
-                return newData;
-            }
-
-        });
 }
 
 function coolifyText(message, font) {
@@ -399,7 +268,6 @@ function swearFilter(msg, wordList) {
         variations.push(removeDupChars(wordList[i]));
         variations.push(removeDupChars(wordList[i]).replaceAll("a", "6"));
         variations.push(removeDupChars(wordList[i]).replaceAll("g", "6"));
-        // variations.push(removeDupChars(wordList[i]).split("").reverse().join(""));
 
         // go through all the variations
         for (var j = 0; j < variations.length; j++) {
@@ -523,44 +391,9 @@ function onCommand_help(msg) {
                 "value": "check latency",
                 "inline": true
             },
-          	{
-                "name": "tictactoe",
-                "value": "play a game of tic-tac-toe",
-                "inline": true
-            },
             {
                 "name": "github",
                 "value": "sends bot's github repo",
-                "inline": true
-            },
-            {
-                "name": "update programs",
-                "value": "updates my program database",
-                "inline": true
-            },
-            {
-                "name": "plagiarism [PROGRAM_ID]",
-                "value": "checks if a program is potentially plagiarised",
-                "inline": true
-            },
-            {
-                "name": "get hot [NUMBER]",
-                "value": "gets data about a program on the hotlist at a certain index",
-                "inline": true
-            },
-            {
-                "name": "get recent [NUMBER]",
-                "value": "gets data about a program on the recents list at a certain index",
-                "inline": true
-            },
-            {
-                "name": "get votes [NUMBER]",
-                "value": "gets data about a program on the votes list at a certain index",
-                "inline": true
-            },
-            {
-                "name": "get KAuser [KA_USERNAME/KAID]",
-                "value": "gets data about a certain KA user",
                 "inline": true
             },
             {
@@ -604,33 +437,18 @@ function onCommand_help(msg) {
                 "inline": true
             },
             {
-                "name": "search user [NICKNAME]",
-                "value": "searches for KA users of a certain nickname",
-                "inline": true
-            },
-            {
                 "name": "search google [SEARCH QUERY]",
                 "value": "performs a google search",
                 "inline": true
             },
             {
-                "name": "search google [SEARCH QUERY]",
+                "name": "search images [SEARCH QUERY]",
                 "value": "performs a google images search",
                 "inline": true
             },
             {
                 "name": "coolify normal [FONT] [TEXT_TO_COOLIFY]",
                 "value": "coolifies text. availible fonts are: normal, gothic, outline, monospace, bubble, cursive",
-                "inline": true
-            },
-            {
-                "name": "wyr",
-                "value": "does a random would you rather question",
-                "inline": true
-            },
-            {
-                "name": "define [WORD/PHRASE]",
-                "value": "sends the definition for a certain word or phrase",
                 "inline": true
             },
             {
@@ -664,18 +482,13 @@ function onCommand_help(msg) {
                 "inline": true
             },
             {
-                "name": "leaderboard [SUS/ACTIVITY/POTTYMOUTH]",
+                "name": "leaderboard [SUS/ACTIVITY]",
                 "value": "creates a leaderboard of a specified category",
                 "inline": true
             },
             {
                 "name": "eval [CODE_BLOCK]",
                 "value": "runs a block of JavaScript code in a strict sandbox",
-                "inline": true
-            },
-            {
-                "name": "translate \"[WORD/PHRASE]\" [ORIGIN_LANGUAGE] => [*TARGET_LANGUAGE*]",
-                "value": "translates input from origin language to target language or english if no target",
                 "inline": true
             },
         ],
@@ -694,192 +507,7 @@ function onCommand_github(msg) {
     sendMessage(msg.channel, "https://github.com/vExcess/ka-monitor");
 }
 
-// function onCommand_update(msg, splitMsg) {
-//     if (splitMsg[1] === "programs") {
-//         if (msg.author.id !== "480905025112244234") {
-//             sendMessage(msg.channel, "You do not have permission to use that command.");
-//         } else {
-//             var targetRecurves = 1000;
-//             var recurves = 0;
-//             if (!programHashes) {
-//                 programHashes = require('./programsDatabase');
-//                 if (programHashes && programHashes.KA_PROGRAMHASHES) {
-//                     programHashes = programHashes.KA_PROGRAMHASHES;
-//                 } else {
-//                     programHashes = {};
-//                 }
-//             }
-//             sendMessage(msg.channel, "Updating Program Database...");
-
-//             var getPrograms = function (programs, page_) {
-//                 for (let j = 0; j < programs.length; j++) {
-//                     getJSON("https://www.khanacademy.org/api/internal/scratchpads/" + programs[j]._id, function (data, program_) {
-//                         if (data && data.revision && data.revision.code) {
-//                             var splitCode = data.revision.code.split("\n");
-//                             var hashedCode = new Set();
-//                             for (var k = 0; k < splitCode.length; k += 2) {
-//                                 hashedCode.add(hashCode(splitCode[k]));
-//                             }
-//                             programHashes["_" + program_._id] = [data.title, Array.from(hashedCode).join(',')];
-
-//                             if (program_.idx1 === targetRecurves && program_.idx2 === 49) {
-//                                 fs.writeFileSync('programsData.js', "exports.KA_PROGRAMHASHES = " + JSON.stringify(programHashes), 'utf-8');
-//                                 sendMessage(msg.channel, "Program Database Updated");
-//                             }
-//                         }
-//                     }, {
-//                         _id: programs[j]._id,
-//                         idx1: page_.idx1,
-//                         idx2: j
-//                     });
-//                 }
-
-//                 if (recurves < targetRecurves) {
-//                     recurves++;
-//                     console.log("page " + recurves);
-//                     getJSON("https://willard.fun/programs?&start=" + recurves * 50, function (programs2, page_2) {
-//                         getPrograms(programs2, page_2);
-//                     }, {
-//                         idx1: recurves
-//                     });
-//                 }
-//             };
-
-//             getJSON("https://willard.fun/programs?&start=" + i * 50, function (programs, page_) {
-//                 getPrograms(programs, page_);
-//             }, {
-//                 idx1: recurves
-//             });
-//         }
-//     }
-// }
-
-// function onCommand_plagiarism(msg, splitMsg, serverData) {
-//     if (serverData.busy) {
-//         sendMessage(msg.channel, "Sorry, the bot is busy at this time");
-//     } else {
-//         var title = "";
-//         var codeHashes = [];
-//         var authorId = "";
-//         var spinoffs = [];
-//         var possibles = [];
-//         if (!programHashes) {
-//             programHashes = require('./programsDatabase');
-//             if (programHashes && programHashes.KA_PROGRAMHASHES) {
-//                 programHashes = programHashes.KA_PROGRAMHASHES;
-//             } else {
-//                 programHashes = {};
-//             }
-//         }
-
-//         serverData.busy = true;
-
-//         // get program
-//         getJSON("https://www.khanacademy.org/api/internal/scratchpads/" + splitMsg[1], function (data) {
-//             title = data.title;
-//             codeHashes = data.revision.code.split("\n").map(line => line.trim()).filter(line => line.length > 4);
-//             for (var i = 0; i < codeHashes.length; i++) {
-//                 codeHashes[i] = hashCode(codeHashes[i]);
-//             }
-//             sendMessage(msg.channel, codeHashes.length + " lines of code to search...");
-//             authorId = data.kaid;
-
-//             // get spin-offs
-//             getJSON("https://www.khanacademy.org/api/internal/scratchpads/" + splitMsg[1] + "/top-forks?limit=1000", function (data2) {
-//                 for (var i = 0; i < data2.scratchpads.length; i++) {
-//                     spinoffs.push(data2.scratchpads[i].url.split("/")[5]);
-//                 }
-
-//                 for (var program in programHashes) {
-//                     var lineHashes = programHashes[program][1].split(",");
-//                     var lineSet = new Set(lineHashes);
-//                     var matches = 0;
-//                     for (var i = 0; i < codeHashes.length; i++) {
-//                         if (lineSet.has(codeHashes[i])) {
-//                             matches += 2;
-//                         }
-//                     }
-//                     if (matches > lineHashes.length * 0.15) {
-//                         possibles.push([
-//                             programHashes[program][0],
-//                             program.slice(1, program.length),
-//                             matches
-//                         ]);
-//                     }
-//                 }
-
-//                 const exampleEmbed = new Discord.MessageEmbed();
-
-//                 possibles.sort(function (a, b) {
-//                     return b[2] - a[2];
-//                 });
-
-//                 for (var i = 0; i < Math.min(possibles.length, 10); i++) {
-//                     exampleEmbed.addField(possibles[i][2] + " lines that match", "[" + possibles[i][0] + "](https://www.khanacademy.org/computer-programming/i/" + possibles[i][1] + ")");
-//                 }
-
-//                 exampleEmbed.setColor("#1fab55");
-//                 exampleEmbed.setTitle("**Results for: " + title + "**");
-//                 exampleEmbed.setURL("https://www.khanacademy.org/computer-programming/i/" + splitMsg[1]);
-//                 sendMessage(msg.channel, {
-//                     embeds: [exampleEmbed]
-//                 });
-//                 serverData.busy = false;
-
-//             });
-//         });
-//     }
-// }
-
-function onCommand_get(msg, splitMsg, mentionedUser) {
-    if (splitMsg[1] === "hot") {
-        // var num = parseInt(splitMsg[2], 10);
-        // if (typeof num !== "number") {
-        //     return;
-        // }
-        // if (num < 1 || num > 10000) {
-        //     sendMessage(msg.channel, "Inputted number must be between 1 and 10000 (inclusive)");
-        // } else {
-        //     sendMessage(msg.channel, "Fetching...");
-        //     getKAData("https://www.khanacademy.org/api/internal/scratchpads/top?sort=3&limit=" + num, num - 1, num, "lists").then(function (txt) {
-        //         sendMessage(msg.channel, txt);
-        //     });
-        // }
-        sendMessage(msg.channel, "This command is temporarily available.");
-    }
-    
-    if (splitMsg[1] === "recent") {
-        // var num = parseInt(splitMsg[2], 10);
-        // if (typeof num !== "number") {
-        //     return;
-        // }
-        // if (num < 1 || num > 10000) {
-        //     sendMessage(msg.channel, "Inputted number must be between 1 and 10000 (inclusive)");
-        // } else {
-        //     sendMessage(msg.channel, "Fetching...");
-        //     getKAData("https://www.khanacademy.org/api/internal/scratchpads/top?sort=2&limit=" + num, num - 1, num, "lists").then(function (txt) {
-        //         sendMessage(msg.channel, txt);
-        //     });
-        // }
-        sendMessage(msg.channel, "This command is temporarily available.");
-    }
-    
-    if (splitMsg[1] === "votes") {
-        // var num = parseInt(splitMsg[2], 10);
-        // if (typeof num !== "number") {
-        //     return;
-        // }
-        // if (num < 1 || num > 10000) {
-        //     sendMessage(msg.channel, "Inputted number must be between 1 and 10000 (inclusive)");
-        // } else {
-        //     sendMessage(msg.channel, "Fetching...");
-        //     getKAData("https://www.khanacademy.org/api/internal/scratchpads/top?sort=5&limit=" + num + "&topic_id=xffde7c31", num - 1, num, "lists").then(function (txt) {
-        //         sendMessage(msg.channel, txt);
-        //     });
-        // }
-        sendMessage(msg.channel, "This command is temporarily available.");
-    }
-    
+function onCommand_get(msg, splitMsg, mentionedUser) {    
     if (splitMsg[1] === "profilepic" || splitMsg[1] === "pfp") {
         if (!mentionedUser) {
             mentionedUser = msg.member.user;
@@ -947,153 +575,6 @@ function onCommand_get(msg, splitMsg, mentionedUser) {
         });
 
         sendMessage(msg.channel, output);
-    }
-    
-    if (splitMsg[1] === "KAuser") {
-        let contentString = "";
-
-        // remove @ if it's included
-        if (splitMsg[2].charAt(0) === "@") {
-            splitMsg[2] = splitMsg[2].slice(1, splitMsg[2].length);
-        }
-
-        // make fetch variables object
-        var variablesObj = {};
-        if (splitMsg[2].slice(0, 5) === "kaid_") {
-            variablesObj.kaid = splitMsg[2];
-        } else {
-            variablesObj.username = splitMsg[2];
-        }
-
-        sendMessage(msg.channel, "Searching...");
-        
-        // get main profile data
-        KA_API.graphQL({
-                operation: "getFullUserProfile",
-                variables: variablesObj
-            },
-            function (data) {
-                // notify if user is not found
-                if (!data.user) {
-                    sendMessage(msg.channel, "User not found.");
-                    return;
-                }
-
-                // calc date joined
-                var dateJoined = "Access Denied";
-                if (data.user.joined) {
-                    dateJoined = data.user.joined.slice(0, 10).split("-");
-                    dateJoined = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"][parseInt(dateJoined[1], 10) - 1] + " " + dateJoined[2] + "th " + dateJoined[0] + " (" + (new Date().getFullYear() - parseInt(dateJoined[0])) + " years ago)";
-                }
-
-                // create embed
-                const kaUserEmbed = new Discord.MessageEmbed()
-                    .setColor("#1fab55")
-                    .setTitle("**" + data.user.nickname + "**")
-                    .setURL("https://www.khanacademy.org/profile/" + data.user.kaid);
-
-                // store user data
-                contentString += "**GENERAL INFO**:" +
-                    "\nUsername:  " + data.user.username +
-                    "\nKAID:  " + data.user.kaid + 
-                    "\nBio:  " + data.user.bio + 
-                    "\nDate Joined:  " + dateJoined + 
-                    "\nEnergy Points:  " + numberWithCommas(data.user.points);
-
-                // get avatar data
-                KA_API.graphQL({
-                        operation: "avatarDataForProfile",
-                        variables: {
-                            kaid: data.user.kaid
-                        },
-                    },
-                    function (data2) {
-                        // set embed thumbnail
-                        kaUserEmbed.setThumbnail(data2.user.avatar.imageSrc.replace("svg/", "").replace(".svg", ".png"));
-
-                        // get badges and discussion data
-                        KA_API.graphQL(
-                            {
-                                operation: "getProfileWidgets",
-                                variables: {
-                                    kaid: data.user.kaid
-                                },
-                            }, 
-                            function (data3) {
-                                var widgets = data3.user.profileWidgets;
-                                var badgeWidget = null;
-                                var discussionWidget = null;
-
-                                // get references to widgets I want
-                                for (var i = 0; i < widgets.length; i++) {
-                                    if (widgets[i].__typename === "BadgeCountWidget") {
-                                        badgeWidget = widgets[i];
-                                    } else if (widgets[i].__typename === "DiscussionWidget") {
-                                        discussionWidget = widgets[i];
-                                    }
-                                }
-
-                                // calc number of badges
-                                var numBadges = 0;
-                                if (badgeWidget) {
-                                    for (var i = 0; i < badgeWidget.badgeCounts.length; i++) {
-                                        numBadges += badgeWidget.badgeCounts[i].count;
-                                    }
-                                }
-                                
-                                // add badges data
-                                contentString += "\nBadge Count:  " + numBadges;
-
-                                if (discussionWidget) {
-                                    var stats = discussionWidget.statistics;
-                                    
-                                    contentString += "\n\n**DISCUSSION INFO**" +
-                                        "\nAnswers:  " + stats.answers + 
-                                        "\nTips & Thanks:  " + stats.comments + 
-                                        "\nQuestions:  " + stats.questions + 
-                                        "\nComments:  " + stats.replies + 
-                                        "\nHelp Requests:  " + stats.projectquestions + 
-                                        "\nHelp Request Answers:  " + stats.projectanswers + 
-                                        "\nVotes Given:  " + stats.votes;
-                                }
-                                
-                                // get program
-                                // getJSON("https://www.khanacademy.org/api/internal/user/scratchpads?kaid=" + data.user.kaid + "&limit=10000", function (data4) {
-                                //     var totalPrograms = data4.scratchpads.length;
-                                //     var totalVotes = 0;
-                                //     var totalForks = 0;
-                                //     for (var i = 0; i < totalPrograms; i++) {
-                                //         var program = data4.scratchpads[i];
-
-                                //         totalVotes += program.sumVotesIncremented;
-                                //         totalForks += program.spinoffCount;
-                                //     }
-
-                                    var totalPrograms = "404 Not found";
-                                    var totalVotes = "404 Not found";
-                                    var totalForks = "404 Not found";
-
-                                    // add programs data
-                                    contentString += "\n\n**PROGRAM INFO**" + 
-                                        "\nProgram Count:  " + totalPrograms + 
-                                        "\nVotes Recieved:  " + totalVotes + 
-                                        "\nSpinoffs Recieved:  " + totalForks + 
-                                        ""
-                                        // "\nAverage Votes Recieved:  " + Math.round(totalVotes / totalPrograms) + 
-                                        // "\nAverage Spinoffs Recieved:  " + Math.round(totalForks / totalPrograms);
-                                    
-                                    // set description and send embed
-                                    kaUserEmbed.setDescription(contentString);
-                                    sendMessage(msg.channel, {
-                                        embeds: [kaUserEmbed]
-                                    });
-                                // });
-                            }
-                        );
-                    }
-                );
-            }
-        );
     }
 
     if (splitMsg[1] === "sus") {
@@ -1222,25 +703,6 @@ function onCommand_get(msg, splitMsg, mentionedUser) {
 }
 
 function onCommand_search(msg, splitMsg) {
-    if (splitMsg[1] === "user") {
-        var results = searchUsers(splitMsg[2]);
-
-        sendMessage(msg.channel, "Searching...");
-
-        const exampleEmbed = new Discord.MessageEmbed();
-
-        for (var i = 0; i < Math.min(results.length, 10); i++) {
-            exampleEmbed.addField(results[i][0], "[kaid_" + results[i][1] + "](https://www.khanacademy.org/profile/kaid_" + results[i][1] + ")");
-        }
-
-        exampleEmbed.setColor("#1fab55");
-        exampleEmbed.setTitle("**Search Results (" + results.length + "):**");
-        exampleEmbed.setURL("https://www.khanacademy.org/computer-programming/i/4733975100702720");
-
-        sendMessage(msg.channel, {
-            embeds: [exampleEmbed]
-        });
-    }
     if (splitMsg[1] === "google" || splitMsg[1] === "bing" || splitMsg[1] === "duckduckgo" || splitMsg[1] === "yahoo") {
         var query = msg.content.slice(15, msg.content.length);
 
@@ -1375,114 +837,6 @@ function onCommand_coolify(msg, splitMsg, p) {
     }
 }
 
-function onCommand_wyr(msg) {
-    var wyrId = Math.floor(random(3, 500000));
-
-    fetch("https://www.either.io/" + wyrId)
-        .then(res => res.text())
-        .then(function (text) {
-            if (!text.includes("We cannot find the page you are looking for")) {
-                var preface = text.split('<h3 class="preface">')[1].split("</h3>")[0];
-
-                var options = text.split('<div class="option">');
-                options = [
-                    options[3].split('</div>')[0].split('rel="nofollow">')[1].split('</a>')[0].replace("\n", ""),
-                    options[4].split('</div>')[0].split('rel="nofollow">')[1].split('</a>')[0].replace("\n", "")
-                ];
-
-                sendMessage(msg.channel, "**" + preface + "**\n\n**EITHER...**\n:regional_indicator_a: " + options[0] + "\n\n**OR...**\n:regional_indicator_b: " + options[1])
-                    .then(function (msg) {
-                        msg.react("🇦")
-                            .then(function () {
-                                msg.react("🇧");
-                            });
-                    });
-
-            } else {
-                sendMessage(msg.channel, "An Error Has Occured. Please Try Again In A Few Seconds.");
-            }
-        });
-}
-
-function onCommand_define(msg, lowMsg) {
-    var inputWord = lowMsg.slice(8, lowMsg.length);
-    var joinedInputWord = inputWord;
-    while (joinedInputWord.includes(" ")) {
-        joinedInputWord = joinedInputWord.replace(" ", "-");
-    }
-
-    fetch("https://www.dictionary.com/browse/" + joinedInputWord)
-        .then(res => res.text())
-        .then(text => {
-            if (!text.includes("No results found for") && !text.includes("Results for ")) {
-                var content = text.split('<div class="css-1avshm7 e16867sm0">')[1];
-                var idx = 0;
-                var divLevel = 1;
-                while (divLevel > 0 && idx < content.length) {
-                    if (content.charAt(idx) === "<") {
-                        if (content.slice(idx + 1, idx + 4) === "div") {
-                            divLevel++;
-                        } else if (content.slice(idx + 1, idx + 5) === "/div") {
-                            divLevel--;
-                        }
-                    }
-                    idx++;
-                }
-                content = '<div class="css-1avshm7 e16867sm0">' + content.slice(0, idx) + "/div>";
-
-                const dom = new JSDOM('<!DOCTYPE html>' + content);
-                const dict = dom.window.document.getElementsByClassName("css-1avshm7 e16867sm0")[0];
-                var word = dict.getElementsByClassName("e1wg9v5m5")[0].textContent;
-                var entries = dict.getElementsByClassName("css-109x55k e1hk9ate4");
-
-                if (entries.length === 0) {
-                    entries = dict.getElementsByClassName("one-click-content css-0 e1w1pzze4");
-                    sendMessage(msg.channel, {
-                        embeds: [{
-                            color: 3447003,
-                            description: ("**" + word + "**\n\n" + entries[0].textContent).slice(0, 2000)
-                        }]
-                    })
-                    return;
-                }
-
-                var definitionOutput = "";
-                for (var i = 0; i < entries.length; i++) {
-                    var entry = entries[i];
-
-                    var partOfSpeech = entry.getElementsByClassName("luna-pos")[0];
-                    if (partOfSpeech) {
-                        partOfSpeech = partOfSpeech.textContent;
-                    }
-                    if (partOfSpeech) {
-                        if (partOfSpeech.charAt(partOfSpeech.length - 1) === ",") {
-                            partOfSpeech = partOfSpeech.slice(0, partOfSpeech.length - 1);
-                        }
-                        definitionOutput += "*`" + partOfSpeech + ":`*\n";
-                    }
-
-                    var defs = entry.getElementsByClassName("one-click-content css-nnyc96 e1q3nk1v1");
-                    for (var j = 0; j < defs.length && j < 3; j++) {
-                        definitionOutput += "*" + (j + 1) + ")*   " + defs[j].textContent + "\n";
-                    }
-
-                    definitionOutput += "\n";
-                }
-
-                sendMessage(msg.channel, {
-                    embeds: [{
-                        color: 3447003,
-                        description: ("**" + word + "**\n\n" + definitionOutput).slice(0, 2000)
-                    }]
-                })
-
-            } else {
-                sendMessage(msg.channel, "No results found for: " + inputWord);
-            }
-
-        });
-}
-
 function onCommand_swearFilter(msg, splitMsg, lowMsg, serverData) {
     if (!authorIsStaff(msg)) {
         sendMessage(msg.channel, "You do not have permission to use that command.");
@@ -1583,30 +937,6 @@ function onCommand_leaderboard (msg, splitMsg) {
         sendMessage(msg.channel, content + "```");
     }
 
-    if (splitMsg[1] === "pottymouth") {
-        var membersArray = [];
-        for (var memberId in membersDatabase) {
-            var member = membersDatabase[memberId];
-            if (member.guilds.includes(msg.guild.id)) {
-                membersArray.push([member.tag, member.badWordUses]);
-            }
-        }
-        
-        membersArray.sort(function (a, b) {
-            return b[1] - a[1];
-        });
-
-        var content = "**POTTY MOUTH LEADERBOARD:**\n```";
-        var leaderboardLength = Math.min(10, membersArray.length);
-
-        for (var i = 0; i < leaderboardLength; i++) {
-            var member = membersArray[i];
-            content += (i + 1) + ") " + member[0] + " --- " + member[1] + " bad words sent\n";
-        }
-
-        sendMessage(msg.channel, content + "```");
-    }
-
     if (splitMsg[1] === "sus") {
         var membersArray = [];
         for (var memberId in membersDatabase) {
@@ -1631,72 +961,6 @@ function onCommand_leaderboard (msg, splitMsg) {
         sendMessage(msg.channel, content + "```");
     }
 
-}
-
-function onCommand_translate (msg) {
-    var msgContent = msg.content.slice(11);
-    
-    var lastQuoteIdx = msgContent.length - 1;
-    while (lastQuoteIdx > 0) {
-        if (msgContent.charAt(lastQuoteIdx) === '"') {
-            break;
-        }
-        lastQuoteIdx--;
-    }
-
-    var firstQuoteIdx = msgContent.indexOf('"') + 1;
-    
-    if (firstQuoteIdx === 0 || lastQuoteIdx === 0) {
-        sendMessage(msg.channel, "Quote to translate not found. Remember to put what you want to translate into quotes.");
-    }
-    
-    var transMsg = msgContent.slice(firstQuoteIdx, lastQuoteIdx);
-    var msgLangs = msgContent.slice(lastQuoteIdx + 2).split("=>");
-    if (msgLangs[0].includes(">")) {
-        msgLangs = msgLangs[0].split(">");
-    }
-    
-    msgLangs[0] = msgLangs[0].toLowerCase().trim();
-    if (msgLangs[1]) {
-        msgLangs[1] = msgLangs[1].toLowerCase().trim();
-    }
-
-    var languages = "auto,detect language|af,afrikaans|sq,albanian|am,amharic|ar,arabic|hy,armenian|as,assamese|ay,aymara|az,azerbaijani|bm,bambara|eu,basque|be,belarusian|bn,bengali|bho,bhojpuri|bs,bosnian|bg,bulgarian|ca,catalan|ceb,cebuano|ny,chichewa|zh-CN,chinese|	zh-CN,chinese (simplified)|zh-TW,chinese (traditional)|co,corsican|hr,croatian|cs,czech|da,danish|dv,dhivehi|doi,dogri|nl,dutch|en,english|eo,esperanto|et,estonian|ee,ewe|tl,filipino|fi,finnish|fr,french|fy,frisian|gl,galician|ka,georgian|de,german|el,greek|gn,guarani|gu,gujarati|ht,haitian creole|ha,hausa|haw,hawaiian|iw,hebrew|hi,hindi|hmn,hmong|hu,hungarian|is,icelandic|ig,igbo|ilo,ilocano|id,indonesian|ga,irish|it,italian|ja,japanese|jw,javanese|kn,kannada|kk,kazakh|km,khmer|rw,kinyarwanda|gom,konkani|ko,korean|kri,krio|ku,kurdish (kurmanji)|ckb,kurdish (sorani)|ky,kyrgyz|lo,lao|la,latin|lv,latvian|ln,lingala|lt,lithuanian|lg,luganda|lb,luxembourgish|mk,macedonian|mai,maithili|mg,malagasy|ms,malay|ml,malayalam|mt,maltese|mi,maori|mr,marathi|mni-Mtei,meiteilon (manipuri)|lus,mizo|mn,mongolian|my,myanmar (burmese)|ne,nepali|no,norwegian|or,odia (oriya)|om,oromo|ps,pashto|fa,persian|pl,polish|pt,portuguese|pa,punjabi|qu,quechua|ro,romanian|ru,russian|sm,samoan|sa,sanskrit|gd,scots gaelic|nso,sepedi|sr,serbian|st,sesotho|sn,shona|sd,sindhi|si,sinhala|sk,slovak|sl,slovenian|so,somali|es,spanish|su,sundanese|sw,swahili|sv,swedish|tg,tajik|ta,tamil|tt,tatar|te,telugu|th,thai|ti,tigrinya|ts,tsonga|tr,turkish|tk,turkmen|ak,twi|uk,ukrainian|ur,urdu|ug,uyghur|uz,uzbek|vi,vietnamese|cy,welsh|xh,xhosa|yi,yiddish|yo,yoruba|zu,zulu".split("|").map(l => l.split(","));
-
-    var knowsLanguage = 0;
-    for (var i = 0; i < languages.length; i++) {
-        var lang = languages[i];
-
-        for (var j = 0; j < Math.min(msgLangs.length, 2); j++) {
-            if (msgLangs[j] === lang[1]) {
-                msgLangs[j] = lang[0];
-                knowsLanguage++;
-            }
-        }
-    }
-
-    if (!msgLangs[1]) {
-        msgLangs[1] = "en";
-    }
-
-    if (knowsLanguage === 0) {
-        sendMessage(msg.channel, "That language is not known.");
-        return;
-    }
-    
-    fetch("https://translate.google.com/_/TranslateWebserverUi/data/batchexecute", {
-        "method": "POST",
-        "headers": {
-            "content-type": "application/x-www-form-urlencoded;charset=UTF-8"
-        },
-        "body": "f.req=" + encodeURIComponent(JSON.stringify([[[process.env['translateToken'], "[[\"" + transMsg + "\",\"" + msgLangs[0] + "\",\"" + msgLangs[1] + "\"]]"]]]))
-    }).then(res => res.text()).then(function (data) {
-        data = data.slice(data.indexOf('\\"') + 2, data.length);
-        data = data.slice(data.indexOf('\\"') + 2, data.length);
-        data = data.slice(data.indexOf('\\"') + 2, data.length);
-        data = data.slice(0, data.indexOf('\\"'));
-        sendMessage(msg.channel, data);
-    })
 }
 
 function onCommand_eval (msg) {
@@ -1876,36 +1140,6 @@ function onCommand_spam (msg) {
             }, Math.random() * amt * 1000);
         }
     }
-}
-
-function onCommand_tictactoe (msg, mentionedUser) {
-    var rows = [];
-
-    console.log(mentionedUser)
-
-    for (var i = 0; i < 3; i++) {
-        var actionRow = new Discord.MessageActionRow().addComponents(
-            new Discord.MessageButton()
-                .setCustomId(i + '0')
-                .setLabel(' ')
-                .setStyle("SECONDARY"),
-            new Discord.MessageButton()
-                .setCustomId(i + '1')
-                .setLabel(' ')
-                .setStyle("SECONDARY"),
-            new Discord.MessageButton()
-                .setCustomId(i + '2')
-                .setLabel(' ')
-                .setStyle("SECONDARY"),
-        );
-        
-        rows.push(actionRow);
-    }
-
-    sendMessage(msg.channel, {
-        content: `**Tic Tac Toe** | ${msg.author.tag} vs AI | ${msg.author.tag}'s turn`,
-        components: rows
-    });
 }
 
 function onCommand_say (msg, p) {
@@ -2111,14 +1345,6 @@ client.on("messageCreate", function (msg) {
                 onCommand_github(msg);
                 break;
 
-            case "update":
-                onCommand_update(msg, splitMsg);
-                break;
-
-            case "plagiarism":
-                onCommand_plagiarism(msg, splitMsg, serverData);
-                break;
-
             case "get":
                 onCommand_get(msg, splitMsg, mentionedUser);
                 break;
@@ -2131,14 +1357,6 @@ client.on("messageCreate", function (msg) {
                 onCommand_coolify(msg, splitMsg, p);
                 break;
 
-            case "wyr":
-                onCommand_wyr(msg);
-                break;
-
-            case "define":
-                onCommand_define(msg, lowMsg);
-                break;
-
             case "swearfilter":
                 onCommand_swearFilter(msg, splitMsg, lowMsg, serverData);
                 break;
@@ -2149,10 +1367,6 @@ client.on("messageCreate", function (msg) {
 
             case "leaderboard":
                 onCommand_leaderboard(msg, splitMsg);
-                break;
-
-            case "translate":
-                onCommand_translate(msg);
                 break;
 
             case "eval":
@@ -2170,10 +1384,6 @@ client.on("messageCreate", function (msg) {
             case "delete": case "clear":
                 onCommand_delete(msg, splitMsg);
                 break;
-
-            case "tictactoe":
-                onCommand_tictactoe(msg, mentionedUser);
-                break;
                 
             case "say":
                 onCommand_say(msg, p);
@@ -2185,177 +1395,6 @@ client.on("messageCreate", function (msg) {
         }
     } catch (err) {
         console.log(err);
-    }
-});
-
-var tictactoe = {
-    isRowWinner: function(rows, whichrow, token) {
-        if (rows[whichrow][0] === token && rows[whichrow][1] === token && rows[whichrow][2] === token) {
-            return true;
-        }
-        return false;
-    },
-    isColumnWinner: function(rows, whichcolumn, token) {
-        if (rows[0][whichcolumn] === token && rows[1][whichcolumn] === token && rows[2][whichcolumn] === token) {
-            return true;
-        }
-        return false;
-    },
-    isWinner: function (rows, token) {
-        if (this.isRowWinner(rows, 0, token)) {
-            return true;
-        }
-        if (this.isRowWinner(rows, 1, token)) {
-            return true;
-        }
-        if (this.isRowWinner(rows, 2, token)) {
-            return true;
-        }
-        
-        if (this.isColumnWinner(rows, 0, token)) {
-            return true;
-        }
-        if (this.isColumnWinner(rows, 1, token)) {
-            return true;
-        }
-        if (this.isColumnWinner(rows, 2, token)) {
-            return true;
-        }
-        
-        if (rows[0][0] === token && rows[1][1] === token && rows[2][2] === token) {
-            return true;    
-        }
-        if (rows[2][0] === token && rows[1][1] === token && rows[0][2] === token) {
-            return true;    
-        }
-        return false;
-    },
-    isBoardFull: function (rows) {
-        for (var i = 0; i < 3; i++) {
-            if (rows[0][i] === null) {
-                return false;
-            }
-            if (rows[1][i] === null) {
-                return false;
-            }
-            if (rows[2][i] === null) {
-                return false;
-            }
-        }
-        return true;
-    },
-    moveAI: function (rows) {
-        var rplace = Math.floor(random(0, 3));
-        var cplace = Math.floor(random(0, 3));
-        
-        if (rows[1][1] === null && Math.random() < 0.5) {
-            rplace = 1;
-            cplace = 1;
-        }
-        
-        for (var r = 0; r < 3; r++) {
-            for (var c = 0; c < 3; c++) {
-                var isNull = false;
-                if (rows[r][c] === null) {
-                    rows[r][c] = "X";
-                    isNull = true;
-                }
-                if (this.isWinner(rows, "X")) {
-                    rplace = r;
-                    cplace = c;
-                }
-                if (isNull) {
-                    rows[r][c] = null;
-                }
-            }
-        }
-        
-        for (var r = 0; r < 3; r++) {
-            for (var c = 0; c < 3; c++) {
-                var isNull = false;
-                if (rows[r][c] === null) {
-                    rows[r][c] = "O";
-                    isNull = true;
-                }
-                if (this.isWinner(rows, "O")) {
-                    rplace = r;
-                    cplace = c;
-                }
-                if (isNull) {
-                    rows[r][c] = null;
-                }
-            }
-        }
-        
-        return [rplace, cplace];
-    }
-};
-
-// ---------- ON BUTTON CLICKS ---------- //
-client.on("interactionCreate", function (interaction) {
-    if (interaction.isButton()) {
-        let msg = interaction.message;
-
-        let datas = msg.content.split(" | ");
-
-        let players = datas[1].split(" vs ");
-        let turn = datas[2].slice(0, datas[2].length - 7);
-
-        if (interaction.user.tag !== players[0] || interaction.user.tag !== turn) {
-            return;
-        }
-        
-        let coords = interaction.customId.split("").map(Number);
-
-        let table = [], rows, winner = null;
-        for (var i = 0; i < msg.components.length; i++) {
-            table.push(msg.components[i].components);
-        }
-
-        let btn = table[coords[0]][coords[1]];
-        if (btn.label === " ") {
-            interaction.deferUpdate();
-            
-            btn.setLabel("X");
-            btn.setStyle("SUCCESS");
-
-            rows = table.map(function (row) {
-                return row.map(function (btn) {
-                    return btn.label === " " ? null : btn.label;
-                });
-            });
-    
-            if (tictactoe.isWinner(rows, "X")) {
-                winner = "X Wins!";
-            } else {    
-                let botCoords = tictactoe.moveAI(rows);
-                let botChoice = table[botCoords[0]][botCoords[1]];
-                
-                botChoice.setLabel("O");
-                botChoice.setStyle("DANGER");
-    
-                rows = table.map(function (row) {
-                    return row.map(function (btn) {
-                        return btn.label === " " ? null : btn.label;
-                    });
-                });
-    
-                if (tictactoe.isWinner(rows, "O")) {
-                    winner = "O Wins!";
-                }
-            }
-    
-            if (tictactoe.isBoardFull(rows)) {
-                winner = "Tie Game!";
-            }
-
-            setTimeout(function () {
-                msg.edit({
-                    content: `**Tic Tac Toe** | ${players[0]} vs ${players[1]} | ${players[0]}'s turn`,
-                    components: msg.components
-                });
-            }, 100);
-        }
     }
 });
 
